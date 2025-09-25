@@ -1,6 +1,27 @@
 # Ad Hoc Flood Watch Multi-Agent Simulation
 
+[![Overview](https://img.shields.io/badge/📖_Overview-Project_Summary-blue)](./OVERVIEW.md)
+[![Documentation](https://img.shields.io/badge/📚_Documentation-Technical_Details-green)](./README.md)
+[![API Reference](https://img.shields.io/badge/🔧_API-Reference_Guide-orange)](#-core-implementation-details)
+[![Examples](https://img.shields.io/badge/💡_Examples-Code_Samples-purple)](#-testing-scenarios--implementation-details)
+
+---
+
+## 📑 Navigation
+
+| Section | Description | Quick Access |
+|---------|-------------|--------------|
+| [**🌊 Overview**](./OVERVIEW.md) | High-level project summary and business case | [View →](./OVERVIEW.md) |
+| [**📚 Technical Docs**](#-system-architecture) | Detailed implementation and code examples | [View ↓](#-system-architecture) |
+| [**🚀 Quick Start**](#-quick-start) | Installation and setup instructions | [View ↓](#-quick-start) |
+| [**🔧 API Reference**](#-core-implementation-details) | Code implementation deep dives | [View ↓](#-core-implementation-details) |
+| [**🧪 Testing Guide**](#-testing-scenarios--implementation-details) | Scenarios and performance benchmarks | [View ↓](#-testing-scenarios--implementation-details) |
+
+---
+
 A comprehensive Node.js simulation of ad hoc networking for flood watch systems using multi-agent systems. This project demonstrates how IoT flood sensors can maintain communication during infrastructure failures through direct peer-to-peer messaging and intelligent agent coordination.
+
+> 💡 **New to this project?** Start with the [**Project Overview**](./OVERVIEW.md) for a high-level introduction, then return here for technical implementation details.
 
 ## 🌊 Overview
 
@@ -745,15 +766,26 @@ const testConfigs = [
 // Performance should scale linearly with network size
 ```
 
+## 🔗 Related Documentation
+
+| Document | Purpose | Audience |
+|----------|---------|----------|
+| [**OVERVIEW.md**](./OVERVIEW.md) | Executive summary and project introduction | Stakeholders, Researchers, Students |
+| [**README.md**](./README.md) | Complete technical documentation | Developers, Engineers |
+| [**API Documentation**](#-core-implementation-details) | Implementation details and code examples | Advanced Developers |
+| [**Testing Guide**](#-testing-scenarios--implementation-details) | Performance benchmarks and scenarios | QA Engineers, Researchers |
+
 ## 🤝 Contributing
 
 This simulation is designed for research and educational purposes. Contributions welcome for:
 
-- Additional routing algorithms
-- New agent behaviors
-- Performance optimizations
-- Extended visualizations
-- Test scenarios
+- **Algorithm Improvements**: Enhanced routing protocols and coordination mechanisms
+- **Agent Behaviors**: New sensor types, failure modes, and intelligence patterns
+- **Performance Optimizations**: Memory usage, processing efficiency, and scalability
+- **Visualization Extensions**: New chart types, 3D views, and interactive features
+- **Testing Scenarios**: Additional failure cases, edge conditions, and benchmarks
+
+> 📖 **Contributing Guidelines**: See our [Project Overview](./OVERVIEW.md#-getting-started) for development setup and contribution workflow.
 
 ## 📜 License
 
@@ -762,19 +794,51 @@ MIT License - See LICENSE file for details
 ## 🔬 Research Citation
 
 If you use this simulation in academic work, please cite:
-```
-Ad Hoc Networking for Flood Watch with Multi-Agent Systems
-[Research Paper Details]
+```bibtex
+@software{adhoc_flood_watch,
+  title={Ad Hoc Networking for Flood Watch with Multi-Agent Systems},
+  author={[Author Names]},
+  year={2024},
+  url={https://github.com/[username]/ad-hoc-flood-watch},
+  note={Multi-Agent Simulation Platform}
+}
 ```
 
-## 🆘 Support
+## 🆘 Support & Resources
 
-For questions or issues:
-- Check the simulation logs for error details
-- Verify Node.js version compatibility
-- Review network configuration parameters
-- Examine agent interaction patterns
+| Resource | Description | Link |
+|----------|-------------|------|
+| **Project Overview** | High-level introduction and business case | [OVERVIEW.md](./OVERVIEW.md) |
+| **Technical Docs** | Complete implementation guide | [README.md](./README.md) |
+| **Issue Tracker** | Bug reports and feature requests | GitHub Issues |
+| **Discussions** | Community support and questions | GitHub Discussions |
+
+### Troubleshooting Quick Links
+- [**Installation Issues**](#-quick-start) - Setup and dependency problems
+- [**Simulation Errors**](#-testing-scenarios--implementation-details) - Runtime and performance issues
+- [**Network Configuration**](#-core-implementation-details) - Agent and connectivity problems
+- [**Performance Tuning**](#-expected-results--performance-metrics) - Optimization and scalability
 
 ---
 
-**Built with ❤️ for flood resilience research**
+## 🌐 Project Ecosystem
+
+```mermaid
+graph TB
+    A[📖 OVERVIEW.md] --> B[🚀 Getting Started]
+    A --> C[💼 Business Case]
+
+    D[📚 README.md] --> E[🔧 Implementation]
+    D --> F[🧪 Testing]
+    D --> G[📊 Performance]
+
+    B --> H[💻 Live Demo]
+    E --> H
+    F --> I[📈 Benchmarks]
+    G --> I
+
+    H --> J[🎓 Educational Use]
+    I --> K[🔬 Research Applications]
+```
+
+**Built with ❤️ for flood resilience research and disaster-resistant IoT systems**

@@ -1,5 +1,23 @@
 # 🌊 Ad Hoc Flood Watch: Project Overview
 
+[![Overview](https://img.shields.io/badge/📖_Overview-Project_Summary-blue)](./OVERVIEW.md)
+[![Documentation](https://img.shields.io/badge/📚_Documentation-Technical_Details-green)](./README.md)
+[![Quick Start](https://img.shields.io/badge/🚀_Quick_Start-Get_Running-orange)](./README.md#-quick-start)
+[![Live Demo](https://img.shields.io/badge/💻_Demo-Try_Now-purple)](#-interactive-simulation-platform)
+
+---
+
+## 📑 Documentation Hub
+
+| Document | Focus | Best For |
+|----------|-------|----------|
+| [**📖 OVERVIEW.md**](./OVERVIEW.md) | **Business Case & Vision** | Executives, Stakeholders, First-time Visitors |
+| [**📚 README.md**](./README.md) | **Technical Implementation** | Developers, Engineers, Researchers |
+| [**🚀 Quick Start**](./README.md#-quick-start) | **Installation & Setup** | Users wanting to run the simulation |
+| [**🔧 API Docs**](./README.md#-core-implementation-details) | **Code Deep Dives** | Advanced developers and contributors |
+
+---
+
 ## Executive Summary
 
 The Ad Hoc Flood Watch system is a cutting-edge simulation platform that demonstrates how Internet of Things (IoT) flood sensors can maintain critical communication during natural disasters when traditional infrastructure fails. This project implements a multi-agent system where sensors autonomously form ad hoc networks, ensuring flood alerts reach emergency services even when cell towers and gateways are damaged.
@@ -163,10 +181,14 @@ Individual sensors become part of an intelligent collective that coordinates res
 
 Ready to explore the future of disaster-resilient communication?
 
-1. **Clone and Install**: Get up and running in minutes with our simple setup
-2. **Run Simulations**: Test various disaster scenarios and network conditions
-3. **Analyze Results**: Use built-in tools to study network performance
-4. **Extend and Customize**: Modify agents, add new features, or create custom scenarios
+| Step | Action | Documentation |
+|------|--------|---------------|
+| **1. Install** | Set up the development environment | [📚 Installation Guide](./README.md#-quick-start) |
+| **2. Run** | Start the simulation platform | [🚀 Quick Start](./README.md#-quick-start) |
+| **3. Explore** | Try different disaster scenarios | [🧪 Testing Scenarios](./README.md#-testing-scenarios--implementation-details) |
+| **4. Customize** | Modify agents and add features | [🔧 Technical Docs](./README.md#-core-implementation-details) |
+
+> 💻 **Ready to dive deeper?** Check out our [Complete Technical Documentation](./README.md) for implementation details and code examples.
 
 ## 🎓 Educational Value
 
@@ -176,8 +198,67 @@ Perfect for:
 - **Research Projects**: Use as a foundation for academic research
 - **Industry Training**: Demonstrate resilient IoT architectures
 
+## 🔗 Quick Navigation
+
+### For Different Audiences
+
+| I am a... | Start Here | Then Go To |
+|-----------|------------|------------|
+| **👔 Executive/Stakeholder** | [Business Case](#-the-problem) | [Performance Metrics](#-performance-capabilities) |
+| **💻 Developer** | [Technical Overview](./README.md#-system-architecture) | [Implementation Details](./README.md#-core-implementation-details) |
+| **🔬 Researcher** | [Research Applications](#-research-applications) | [Testing Scenarios](./README.md#-testing-scenarios--implementation-details) |
+| **🎓 Student** | [Architecture Overview](#-architecture-at-a-glance) | [Educational Examples](./README.md#-testing-scenarios--implementation-details) |
+| **🚨 Emergency Manager** | [Problem Statement](#-the-problem) | [Real-World Impact](#-real-world-impact) |
+
+### Documentation Map
+
+```mermaid
+graph LR
+    A[📖 OVERVIEW.md] --> B{Your Role?}
+
+    B -->|Executive| C[Business Case]
+    B -->|Developer| D[📚 README.md]
+    B -->|Student| E[Educational Content]
+    B -->|Researcher| F[Research Applications]
+
+    C --> G[Performance Metrics]
+    D --> H[Technical Implementation]
+    E --> I[Code Examples]
+    F --> J[Testing Scenarios]
+
+    G --> K[🚀 Try the Demo]
+    H --> K
+    I --> K
+    J --> K
+```
+
+## 🆘 Support & Community
+
+| Need Help With | Resource | Link |
+|----------------|----------|------|
+| **Getting Started** | Installation and setup guide | [Quick Start →](./README.md#-quick-start) |
+| **Technical Issues** | Detailed troubleshooting | [Support Guide →](./README.md#-support--resources) |
+| **Contributing** | Development guidelines | [Contributing →](./README.md#-contributing) |
+| **Research Questions** | Academic and research support | [Research Applications →](#-research-applications) |
+
+---
+
+## 🌐 Project Ecosystem Overview
+
+This project provides a complete research and development platform:
+
+| Component | Purpose | Access |
+|-----------|---------|--------|
+| **📖 High-Level Overview** | Project vision and business case | *You are here* |
+| **📚 Technical Documentation** | Complete implementation guide | [README.md →](./README.md) |
+| **💻 Live Simulation** | Interactive demo platform | [Run Locally →](./README.md#-quick-start) |
+| **🧪 Research Tools** | Testing and analysis framework | [Testing Guide →](./README.md#-testing-scenarios--implementation-details) |
+| **🔧 Developer APIs** | Code examples and customization | [API Reference →](./README.md#-core-implementation-details) |
+
 ---
 
 **This isn't just a simulation—it's a blueprint for saving lives through intelligent, resilient technology.**
 
 *Built with ❤️ for a safer, more connected world during natural disasters.*
+
+> **Next Steps**: Ready for technical details? [**Explore the Complete Documentation →**](./README.md)
