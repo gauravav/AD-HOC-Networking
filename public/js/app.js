@@ -3,10 +3,17 @@ class FloodWatchApp {
         this.socket = io();
         this.isRunning = false;
         this.currentConfig = {
-            gridSize: 50,
+            gridWidth: 100,
+            gridHeight: 50,
             sensorCount: 100,
-            relayRatio: 0.2,
+            communicationRange: 5,
             simulationSpeed: 1000
+        };
+
+        this.serverStats = {
+            totalMessages: 0,
+            alertMessages: 0,
+            lastMessage: null
         };
 
         this.gridVis = new GridVisualization('grid-canvas');
@@ -44,16 +51,10 @@ class FloodWatchApp {
             this.hideFloodControls();
         });
 
-        document.getElementById('fail-node-btn').addEventListener('click', () => {
-            this.triggerNodeFailure();
-        });
-
-        document.getElementById('fail-gateway-btn').addEventListener('click', () => {
-            this.triggerGatewayFailure();
-        });
+        // Node and gateway failure buttons removed
 
         // Configuration changes
-        ['grid-size', 'sensor-count', 'relay-ratio', 'speed'].forEach(id => {
+        ['grid-width', 'grid-height', 'sensor-count', 'comm-range', 'speed'].forEach(id => {
             document.getElementById(id).addEventListener('change', (e) => {
                 this.updateConfiguration(id, e.target.value);
             });
@@ -66,6 +67,11 @@ class FloodWatchApp {
 
         document.getElementById('export-log').addEventListener('click', () => {
             this.exportLog();
+        });
+
+        // Central server console controls
+        document.getElementById('clear-server-log').addEventListener('click', () => {
+            this.clearServerLog();
         });
 
         // Grid click handler
@@ -99,24 +105,23 @@ class FloodWatchApp {
             this.handleFloodEvent(data);
         });
 
-        this.socket.on('node-event', (data) => {
-            this.handleNodeEvent(data);
-        });
-
-        this.socket.on('gateway-event', (data) => {
-            this.handleGatewayEvent(data);
-        });
+        // Node and gateway events removed
 
         this.socket.on('incident-report', (data) => {
             this.updateIncidents(data);
+        });
+
+        this.socket.on('central-server-message', (data) => {
+            this.handleServerMessage(data);
         });
     }
 
     startSimulation() {
         const config = {
-            gridSize: parseInt(document.getElementById('grid-size').value),
+            gridWidth: parseInt(document.getElementById('grid-width').value) || 100,
+            gridHeight: parseInt(document.getElementById('grid-height').value) || 50,
             sensorCount: parseInt(document.getElementById('sensor-count').value),
-            relayRatio: parseFloat(document.getElementById('relay-ratio').value),
+            communicationRange: parseFloat(document.getElementById('comm-range').value) || 5,
             simulationSpeed: parseInt(document.getElementById('speed').value)
         };
 
@@ -132,6 +137,7 @@ class FloodWatchApp {
         this.stopSimulation();
         setTimeout(() => {
             this.clearLog();
+            this.clearServerLog();
             this.clearIncidents();
             this.clearMetrics();
             this.gridVis.floodAreas = [];
@@ -152,8 +158,8 @@ class FloodWatchApp {
         const y = parseInt(document.getElementById('flood-y').value);
         const waterLevel = parseFloat(document.getElementById('flood-level').value);
 
-        if (x >= 0 && x < this.currentConfig.gridSize &&
-            y >= 0 && y < this.currentConfig.gridSize &&
+        if (x >= 0 && x < this.currentConfig.gridWidth &&
+            y >= 0 && y < this.currentConfig.gridHeight &&
             waterLevel > 0) {
 
             this.socket.emit('trigger-flood', { x, y, waterLevel });
@@ -164,40 +170,34 @@ class FloodWatchApp {
         }
     }
 
-    triggerNodeFailure() {
-        // This would be handled by the server randomly
-        this.logMessage('Random node failure triggered', 'warning');
-    }
-
-    triggerGatewayFailure() {
-        // This would be handled by the server randomly
-        this.logMessage('Random gateway failure triggered', 'warning');
-    }
 
     updateConfiguration(parameter, value) {
-        const numValue = parameter === 'relay-ratio' ? parseFloat(value) : parseInt(value);
-        this.currentConfig[parameter.replace('-', '')] = numValue;
+        let processedValue;
+        if (parameter === 'comm-range') {
+            processedValue = parseFloat(value);
+            this.currentConfig.communicationRange = processedValue;
+        } else {
+            processedValue = parseInt(value);
+            this.currentConfig[parameter.replace('-', '')] = processedValue;
+        }
     }
 
     updateStatus(data) {
-        const { status, gridState, healthReport, incidentReport } = data;
+        const { status, gridState, incidentReport, centralServerStatus } = data;
 
         // Update status indicators
         document.getElementById('sim-status').textContent = status.isRunning ? 'Running' : 'Stopped';
         document.getElementById('current-tick').textContent = status.currentTick;
-        document.getElementById('active-nodes').textContent = status.networkHealth.activeNodes;
-        document.getElementById('failed-nodes').textContent = status.networkHealth.failedNodes;
+        document.getElementById('active-nodes').textContent = status.config.sensorCount;
+        document.getElementById('central-messages').textContent = status.centralServerMessages || 0;
         document.getElementById('active-incidents').textContent = status.activeIncidents;
         document.getElementById('messages-sent').textContent = status.metrics.messagesGenerated;
 
         // Update metrics
-        this.updateMetrics(status.metrics, status.networkHealth);
+        this.updateMetrics(status.metrics);
 
         // Update grid visualization
         this.gridVis.updateGrid(gridState);
-
-        // Update health panel
-        this.updateHealthPanel(healthReport);
 
         // Update incidents (if new report available)
         if (incidentReport) {
@@ -205,7 +205,7 @@ class FloodWatchApp {
         }
     }
 
-    updateMetrics(metrics, networkHealth) {
+    updateMetrics(metrics) {
         // Update metric cards
         document.getElementById('delivery-rate').textContent =
             Math.round(metrics.deliverySuccessRate || 0) + '%';
@@ -213,56 +213,18 @@ class FloodWatchApp {
             Math.round(metrics.averageDelay || 0) + 'ms';
         document.getElementById('network-overhead').textContent =
             Math.round(metrics.networkOverhead || 0) + '%';
-        document.getElementById('resilience').textContent =
-            Math.round(networkHealth.networkResilience || 100) + '%';
+        document.getElementById('grid-dimensions').textContent =
+            `${this.currentConfig.gridWidth || 100}m x ${this.currentConfig.gridHeight || 50}m`;
 
         // Update chart
         this.metricsChart.addDataPoint({
             deliverySuccessRate: metrics.deliverySuccessRate || 0,
             averageDelay: metrics.averageDelay || 0,
             networkOverhead: metrics.networkOverhead || 0,
-            networkResilience: networkHealth.networkResilience || 100
+            networkResilience: 100
         });
     }
 
-    updateHealthPanel(healthReport) {
-        if (!healthReport) return;
-
-        const summaryDiv = document.getElementById('health-summary');
-        summaryDiv.innerHTML = `
-            <div class="health-stat">
-                <span>Network Resilience:</span>
-                <span>${healthReport.networkResilience}%</span>
-            </div>
-            <div class="health-stat">
-                <span>Total Nodes:</span>
-                <span>${healthReport.networkHealth.totalNodes}</span>
-            </div>
-            <div class="health-stat">
-                <span>Active Nodes:</span>
-                <span>${healthReport.networkHealth.activeNodes}</span>
-            </div>
-            <div class="health-stat">
-                <span>Failed Nodes:</span>
-                <span>${healthReport.networkHealth.failedNodes}</span>
-            </div>
-            <div class="health-stat">
-                <span>Low Battery:</span>
-                <span>${healthReport.networkHealth.batteryLow}</span>
-            </div>
-        `;
-
-        const recommendationsDiv = document.getElementById('health-recommendations');
-        if (healthReport.recommendations && healthReport.recommendations.length > 0) {
-            recommendationsDiv.innerHTML = healthReport.recommendations.map(rec => `
-                <div class="recommendation priority-${rec.priority.toLowerCase()}">
-                    <strong>${rec.type}:</strong> ${rec.message}
-                </div>
-            `).join('');
-        } else {
-            recommendationsDiv.innerHTML = '<p class="no-data">No recommendations at this time</p>';
-        }
-    }
 
     updateIncidents(incidentReport) {
         if (!incidentReport || !incidentReport.incidents) return;
@@ -296,18 +258,11 @@ class FloodWatchApp {
         this.gridVis.addFloodArea(data.epicenter.x, data.epicenter.y, 5, data.waterLevel / 5);
     }
 
-    handleNodeEvent(data) {
-        this.logMessage(`Node ${data.nodeId} failed at location (${data.location.x}, ${data.location.y})`, 'error');
-    }
-
-    handleGatewayEvent(data) {
-        this.logMessage(`Gateway connection lost at node ${data.nodeId}`, 'error');
-    }
 
     updateUI() {
         const startBtn = document.getElementById('start-btn');
         const stopBtn = document.getElementById('stop-btn');
-        const configInputs = ['grid-size', 'sensor-count', 'relay-ratio', 'speed'];
+        const configInputs = ['grid-width', 'grid-height', 'sensor-count', 'comm-range', 'speed'];
 
         if (this.isRunning) {
             startBtn.disabled = true;
@@ -384,6 +339,77 @@ class FloodWatchApp {
             resilience: []
         };
         this.metricsChart.draw();
+    }
+
+    handleServerMessage(data) {
+        this.serverStats.totalMessages++;
+
+        if (data.type === 'ALERT') {
+            this.serverStats.alertMessages++;
+        }
+
+        this.serverStats.lastMessage = data;
+
+        // Update server stats display
+        document.getElementById('server-msg-count').textContent = this.serverStats.totalMessages;
+        document.getElementById('server-alert-count').textContent = this.serverStats.alertMessages;
+        document.getElementById('server-last-msg').textContent =
+            `${data.type} from ${data.sender} at (${data.location.x}, ${data.location.y})`;
+
+        // Add to server log
+        this.logServerMessage(data);
+    }
+
+    logServerMessage(data) {
+        const serverLogContent = document.getElementById('server-log-content');
+        const timestamp = new Date().toLocaleTimeString();
+
+        const logEntry = document.createElement('div');
+        logEntry.className = `server-log-entry ${data.type.toLowerCase()}`;
+
+        let messageDetails = '';
+        if (data.type === 'ALERT' && data.data) {
+            messageDetails = `Water: ${data.data.waterLevel || 0}m`;
+        } else if (data.type === 'HELLO' && data.data && data.data.neighbors) {
+            const neighborCount = data.data.neighbors.length;
+            const battery = data.data.batteryLevel ? data.data.batteryLevel.toFixed(2) : 'N/A';
+            const neighborList = data.data.neighbors.length > 0
+                ? data.data.neighbors.map(n => `${n.id}`).join(', ')
+                : 'none';
+            messageDetails = `Battery: ${battery} | Neighbors[${neighborCount}]: ${neighborList}`;
+        }
+
+        logEntry.innerHTML = `
+            <span class="server-timestamp">[${timestamp}]</span>
+            <span class="server-msg-type">${data.type}</span>
+            <span class="server-sender">from ${data.sender}</span>
+            <span class="server-location">@(${data.location.x}, ${data.location.y})</span>
+            ${messageDetails ? `<span class="server-details">${messageDetails}</span>` : ''}
+        `;
+
+        serverLogContent.appendChild(logEntry);
+
+        // Auto-scroll if enabled
+        if (document.getElementById('server-auto-scroll').checked) {
+            serverLogContent.scrollTop = serverLogContent.scrollHeight;
+        }
+
+        // Keep only last 100 log entries
+        while (serverLogContent.children.length > 100) {
+            serverLogContent.removeChild(serverLogContent.firstChild);
+        }
+    }
+
+    clearServerLog() {
+        document.getElementById('server-log-content').innerHTML = '';
+        this.serverStats = {
+            totalMessages: 0,
+            alertMessages: 0,
+            lastMessage: null
+        };
+        document.getElementById('server-msg-count').textContent = '0';
+        document.getElementById('server-alert-count').textContent = '0';
+        document.getElementById('server-last-msg').textContent = 'None';
     }
 }
 

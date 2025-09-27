@@ -1,16 +1,14 @@
 const SensorAgent = require('./agents/sensorAgent');
-const RelayAgent = require('./agents/relayAgent');
 const CoordinationAgent = require('./agents/coordinationAgent');
-const HealthAgent = require('./agents/healthAgent');
 const { MessageTypes } = require('./messages');
 
 class FloodWatchSimulation {
   constructor(config = {}, io = null) {
     this.config = {
-      gridSize: config.gridSize || 50,
+      gridWidth: config.gridWidth || 100, // 100 meters
+      gridHeight: config.gridHeight || 50, // 50 meters
       sensorCount: config.sensorCount || 100,
-      relayRatio: config.relayRatio || 0.2, // 20% relay nodes
-      gatewayCount: config.gatewayCount || 5,
+      communicationRange: config.communicationRange || 5, // meters
       simulationSpeed: config.simulationSpeed || 1000, // ms per tick
       ...config
     };
@@ -21,14 +19,12 @@ class FloodWatchSimulation {
 
     // Simulation components
     this.sensors = [];
-    this.relays = [];
-    this.gateways = new Set();
     this.coordinationAgent = new CoordinationAgent('COORD-1');
-    this.healthAgent = new HealthAgent('HEALTH-1');
+    this.centralServer = { id: 'CENTRAL-SERVER', messagesReceived: [] };
 
-    // Grid and positioning
-    this.grid = Array(this.config.gridSize).fill(null).map(() =>
-      Array(this.config.gridSize).fill(null)
+    // Grid and positioning (100m x 50m)
+    this.grid = Array(this.config.gridWidth).fill(null).map(() =>
+      Array(this.config.gridHeight).fill(null)
     );
 
     // Simulation metrics
@@ -48,42 +44,26 @@ class FloodWatchSimulation {
   }
 
   initializeNetwork() {
-    // Create sensors and relays
+    // Create only sensor nodes
     const totalNodes = this.config.sensorCount;
-    const relayCount = Math.floor(totalNodes * this.config.relayRatio);
-    const sensorCount = totalNodes - relayCount;
 
     // Generate positions for all nodes
     const positions = this.generateNodePositions(totalNodes);
 
-    // Create sensor agents
-    for (let i = 0; i < sensorCount; i++) {
+    // Create sensor agents with configurable communication range
+    for (let i = 0; i < totalNodes; i++) {
       const pos = positions[i];
-      const sensor = new SensorAgent(`SENSOR-${i}`, pos.x, pos.y);
+      const sensor = new SensorAgent(`SENSOR-${i}`, pos.x, pos.y, this.config.communicationRange);
       this.sensors.push(sensor);
       this.grid[pos.x][pos.y] = sensor;
-      this.healthAgent.registerNode(sensor);
     }
-
-    // Create relay agents
-    for (let i = 0; i < relayCount; i++) {
-      const pos = positions[sensorCount + i];
-      const relay = new RelayAgent(`RELAY-${i}`, pos.x, pos.y);
-      this.relays.push(relay);
-      this.grid[pos.x][pos.y] = relay;
-      this.healthAgent.registerNode(relay);
-    }
-
-    // Assign gateway connections
-    this.assignGatewayConnections();
 
     // Initialize neighbor discovery
     this.discoverNeighbors();
 
     this.log('Network initialized', {
-      sensors: sensorCount,
-      relays: relayCount,
-      gateways: this.gateways.size
+      sensors: totalNodes,
+      gridSize: `${this.config.gridWidth}m x ${this.config.gridHeight}m`
     });
   }
 
@@ -92,8 +72,8 @@ class FloodWatchSimulation {
     const occupied = new Set();
 
     while (positions.length < count) {
-      const x = Math.floor(Math.random() * this.config.gridSize);
-      const y = Math.floor(Math.random() * this.config.gridSize);
+      const x = Math.floor(Math.random() * this.config.gridWidth);
+      const y = Math.floor(Math.random() * this.config.gridHeight);
       const key = `${x},${y}`;
 
       if (!occupied.has(key)) {
@@ -105,23 +85,10 @@ class FloodWatchSimulation {
     return positions;
   }
 
-  assignGatewayConnections() {
-    const allNodes = [...this.sensors, ...this.relays];
-    const gatewayNodeCount = Math.min(this.config.gatewayCount, allNodes.length);
-
-    // Randomly select nodes to have gateway connections
-    const shuffled = [...allNodes].sort(() => Math.random() - 0.5);
-    for (let i = 0; i < gatewayNodeCount; i++) {
-      shuffled[i].hasGatewayConnection = true;
-      this.gateways.add(shuffled[i].id);
-    }
-  }
 
   discoverNeighbors() {
-    const allNodes = [...this.sensors, ...this.relays];
-
-    for (const node of allNodes) {
-      for (const otherNode of allNodes) {
+    for (const node of this.sensors) {
+      for (const otherNode of this.sensors) {
         if (node.id !== otherNode.id) {
           const distance = node.calculateDistance(otherNode.location);
           if (distance <= node.communicationRange) {
@@ -153,9 +120,8 @@ class FloodWatchSimulation {
     }
 
     // Stop all agents
-    [...this.sensors, ...this.relays].forEach(agent => agent.stop());
+    this.sensors.forEach(agent => agent.stop());
     this.coordinationAgent.stop();
-    this.healthAgent.stop();
 
     this.log('Simulation stopped');
     this.emit('simulation-status', { running: false, tick: this.currentTick });
@@ -167,18 +133,16 @@ class FloodWatchSimulation {
     // Process messages between agents
     this.processMessagePropagation();
 
-    // Update health monitoring
-    this.updateHealthStatus();
-
     // Process coordination (incident management)
     this.processIncidentCoordination();
 
     // Update metrics
     this.updateMetrics();
 
-    // Random events
+    // Random flood events
     if (Math.random() < 0.02) { // 2% chance per tick
-      this.triggerRandomEvent();
+      this.log('🌊 Auto flood event triggered randomly', { type: 'AUTO_FLOOD' });
+      this.triggerRandomFlood();
     }
 
     // Emit status update
@@ -188,12 +152,11 @@ class FloodWatchSimulation {
   }
 
   processMessagePropagation() {
-    const allNodes = [...this.sensors, ...this.relays];
-
     // Collect all pending messages
     const pendingMessages = [];
+    const centralServerMessages = [];
 
-    for (const node of allNodes) {
+    for (const node of this.sensors) {
       if (!node.isActive || node.messageBuffer.length === 0) continue;
 
       const messages = [...node.messageBuffer];
@@ -206,21 +169,31 @@ class FloodWatchSimulation {
             message: msgData.message,
             timestamp: msgData.timestamp
           });
+        } else if (msgData.action === 'central_server_delivery') {
+          centralServerMessages.push({
+            sender: node,
+            message: msgData.message,
+            timestamp: msgData.timestamp
+          });
         }
       }
     }
 
-    // Propagate messages
+    // Propagate messages between nodes
     for (const msgData of pendingMessages) {
       this.propagateMessage(msgData.sender, msgData.message);
+    }
+
+    // Send messages to central server
+    for (const msgData of centralServerMessages) {
+      this.deliverToCentralServer(msgData.message, msgData.sender);
     }
   }
 
   propagateMessage(sender, message) {
-    const allNodes = [...this.sensors, ...this.relays];
     let deliveredCount = 0;
 
-    for (const receiver of allNodes) {
+    for (const receiver of this.sensors) {
       if (receiver.id === sender.id || !receiver.isActive) continue;
 
       const distance = sender.calculateDistance(receiver.location);
@@ -231,16 +204,6 @@ class FloodWatchSimulation {
         if (Math.random() < deliveryProbability) {
           receiver.receiveMessage(message, sender);
           deliveredCount++;
-
-          // Process alert messages through coordination agent
-          if (message.type === MessageTypes.ALERT) {
-            const result = this.coordinationAgent.processAlert(message);
-            if (result.action === 'INCIDENT_CREATED') {
-              this.metrics.incidentsCreated++;
-            } else if (result.action === 'DUPLICATE_REMOVED') {
-              this.metrics.duplicatesRemoved++;
-            }
-          }
         } else {
           this.metrics.messagesLost++;
         }
@@ -251,13 +214,60 @@ class FloodWatchSimulation {
     this.metrics.messagesDelivered += deliveredCount;
   }
 
-  updateHealthStatus() {
-    const allNodes = [...this.sensors, ...this.relays];
+  deliverToCentralServer(message, sender) {
+    // Central server receives all messages (100% delivery)
+    const serverMessage = {
+      message,
+      sender: sender.id,
+      timestamp: Date.now(),
+      location: sender.location
+    };
 
-    for (const node of allNodes) {
-      this.healthAgent.updateNodeStatus(node);
+    this.centralServer.messagesReceived.push(serverMessage);
+
+    // Process alert messages through coordination agent
+    if (message.type === MessageTypes.ALERT) {
+      const result = this.coordinationAgent.processAlert(message);
+      if (result.action === 'INCIDENT_CREATED') {
+        this.metrics.incidentsCreated++;
+      } else if (result.action === 'DUPLICATE_REMOVED') {
+        this.metrics.duplicatesRemoved++;
+      }
+    }
+
+    // Emit central server message for UI
+    this.emit('central-server-message', {
+      type: message.type,
+      sender: sender.id,
+      location: sender.location,
+      data: message.data || message,
+      timestamp: Date.now()
+    });
+
+    // Enhanced logging for HELLO messages with neighbor data
+    if (message.type === MessageTypes.HELLO && message.data.neighbors) {
+      const neighborCount = message.data.neighbors.length;
+      const neighborList = message.data.neighbors.map(n =>
+        `${n.id}@(${n.location.x},${n.location.y})`
+      ).join(', ');
+
+      this.log(`💻 Central Server received ${message.type} from ${sender.id} | Battery: ${message.data.batteryLevel.toFixed(2)} | Neighbors[${neighborCount}]: ${neighborList || 'none'}`, {
+        messageType: message.type,
+        sender: sender.id,
+        location: sender.location,
+        batteryLevel: message.data.batteryLevel,
+        neighborCount: neighborCount,
+        neighbors: message.data.neighbors
+      });
+    } else {
+      this.log(`💻 Central Server received ${message.type} from ${sender.id}`, {
+        messageType: message.type,
+        sender: sender.id,
+        location: sender.location
+      });
     }
   }
+
 
   processIncidentCoordination() {
     // Let coordination agent generate reports
@@ -268,12 +278,9 @@ class FloodWatchSimulation {
   }
 
   updateMetrics() {
-    const healthStats = this.healthAgent.getNetworkStatistics();
-
     this.metrics.networkOverhead = this.calculateNetworkOverhead();
     this.metrics.averageDelay = this.calculateAverageDelay();
     this.metrics.duplicatesRemoved = this.coordinationAgent.duplicateAlerts.size;
-    this.metrics.nodeFailures = healthStats.failedNodes + healthStats.unresponsive;
 
     // Calculate delivery success rate
     if (this.metrics.messagesGenerated > 0) {
@@ -284,11 +291,10 @@ class FloodWatchSimulation {
 
   calculateNetworkOverhead() {
     // Simplified calculation: ratio of control messages to data messages
-    const allNodes = [...this.sensors, ...this.relays];
     let controlMessages = 0;
     let dataMessages = 0;
 
-    for (const node of allNodes) {
+    for (const node of this.sensors) {
       controlMessages += node.sentMessages.size; // Approximate
       // Data messages would be actual sensor readings
     }
@@ -314,57 +320,12 @@ class FloodWatchSimulation {
     return messageCount > 0 ? totalDelay / messageCount : 0;
   }
 
-  triggerRandomEvent() {
-    const eventType = Math.random();
 
-    if (eventType < 0.4) {
-      // Node failure
-      this.triggerNodeFailure();
-    } else if (eventType < 0.7) {
-      // Gateway failure
-      this.triggerGatewayFailure();
-    } else {
-      // Random flood detection
-      this.triggerRandomFlood();
-    }
-  }
 
-  triggerNodeFailure() {
-    const allNodes = [...this.sensors, ...this.relays].filter(n => n.isActive);
-    if (allNodes.length === 0) return;
-
-    const randomNode = allNodes[Math.floor(Math.random() * allNodes.length)];
-    randomNode.fail();
-
-    this.log('Node failure', { nodeId: randomNode.id });
-    this.emit('node-event', {
-      type: 'FAILURE',
-      nodeId: randomNode.id,
-      location: randomNode.location
-    });
-  }
-
-  triggerGatewayFailure() {
-    const gatewayNodes = [...this.sensors, ...this.relays]
-      .filter(n => n.hasGatewayConnection && n.isActive);
-
-    if (gatewayNodes.length === 0) return;
-
-    const randomGateway = gatewayNodes[Math.floor(Math.random() * gatewayNodes.length)];
-    randomGateway.hasGatewayConnection = false;
-    this.gateways.delete(randomGateway.id);
-
-    this.log('Gateway failure', { nodeId: randomGateway.id });
-    this.emit('gateway-event', {
-      type: 'FAILURE',
-      nodeId: randomGateway.id,
-      location: randomGateway.location
-    });
-  }
 
   triggerRandomFlood() {
-    const x = Math.floor(Math.random() * this.config.gridSize);
-    const y = Math.floor(Math.random() * this.config.gridSize);
+    const x = Math.floor(Math.random() * this.config.gridWidth);
+    const y = Math.floor(Math.random() * this.config.gridHeight);
     const waterLevel = 1.5 + Math.random() * 2; // 1.5 to 3.5 meters
 
     this.triggerFlood(x, y, waterLevel);
@@ -374,7 +335,7 @@ class FloodWatchSimulation {
     // Affect multiple nodes in the area
     const affectedNodes = [];
 
-    for (const node of [...this.sensors, ...this.relays]) {
+    for (const node of this.sensors) {
       const distance = Math.sqrt(
         Math.pow(node.location.x - x, 2) + Math.pow(node.location.y - y, 2)
       );
@@ -392,10 +353,15 @@ class FloodWatchSimulation {
       }
     }
 
-    this.log('Flood triggered', {
+    const logMessage = affectedNodes.length > 0 ?
+      `🌊 FLOOD DETECTED at (${x}, ${y}) - Water: ${waterLevel.toFixed(1)}m - ${affectedNodes.length} sensors affected` :
+      `🌊 Flood at (${x}, ${y}) - Water: ${waterLevel.toFixed(1)}m - No sensors in range`;
+
+    this.log(logMessage, {
       epicenter: { x, y },
       waterLevel,
-      affectedNodes: affectedNodes.length
+      affectedNodes: affectedNodes.length,
+      type: 'FLOOD_EVENT'
     });
 
     this.emit('flood-event', {
@@ -410,25 +376,24 @@ class FloodWatchSimulation {
       isRunning: this.isRunning,
       currentTick: this.currentTick,
       metrics: this.metrics,
-      networkHealth: this.healthAgent.getNetworkStatistics(),
       activeIncidents: this.coordinationAgent.getAllActiveIncidents().length,
+      centralServerMessages: this.centralServer.messagesReceived.length,
       config: this.config
     };
   }
 
   getGridState() {
-    const gridState = Array(this.config.gridSize).fill(null).map(() =>
-      Array(this.config.gridSize).fill(null)
+    const gridState = Array(this.config.gridWidth).fill(null).map(() =>
+      Array(this.config.gridHeight).fill(null)
     );
 
-    for (const node of [...this.sensors, ...this.relays]) {
+    for (const node of this.sensors) {
       gridState[node.location.x][node.location.y] = {
         id: node.id,
-        type: node.isRelay ? 'relay' : 'sensor',
-        status: node.isActive ? 'active' : 'failed',
+        type: 'sensor',
+        status: node.isActive ? 'active' : 'inactive',
         batteryLevel: node.batteryLevel,
         waterLevel: node.waterLevel,
-        hasGateway: node.hasGatewayConnection,
         neighbors: node.neighbors.size
       };
     }
@@ -464,8 +429,11 @@ class FloodWatchSimulation {
     this.emit('status-update', {
       status: this.getStatus(),
       gridState: this.getGridState(),
-      healthReport: this.healthAgent.generateHealthReport(),
-      incidentReport: this.coordinationAgent.generateIncidentReports()
+      incidentReport: this.coordinationAgent.generateIncidentReports(),
+      centralServerStatus: {
+        messagesReceived: this.centralServer.messagesReceived.length,
+        recentMessages: this.centralServer.messagesReceived.slice(-10)
+      }
     });
   }
 }

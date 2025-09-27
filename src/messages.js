@@ -27,11 +27,12 @@ class Message {
 }
 
 class HelloMessage extends Message {
-  constructor(senderId, batteryLevel, location) {
+  constructor(senderId, batteryLevel, location, neighbors = []) {
     super(MessageTypes.HELLO, senderId, {
       batteryLevel,
       location,
-      nodeType: 'sensor'
+      nodeType: 'sensor',
+      neighbors: neighbors
     });
   }
 }

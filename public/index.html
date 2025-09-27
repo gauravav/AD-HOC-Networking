@@ -27,24 +27,24 @@
 
                 <div class="control-group">
                     <h3>Parameters</h3>
-                    <label>Grid Size: <input type="number" id="grid-size" value="50" min="10" max="100"></label>
+                    <label>Grid Width (m): <input type="number" id="grid-width" value="100" min="50" max="200"></label>
+                    <label>Grid Height (m): <input type="number" id="grid-height" value="50" min="30" max="100"></label>
                     <label>Sensor Count: <input type="number" id="sensor-count" value="100" min="10" max="500"></label>
-                    <label>Relay Ratio: <input type="number" id="relay-ratio" value="0.2" min="0.1" max="0.5" step="0.1"></label>
+                    <label>Communication Range (m): <input type="number" id="comm-range" value="5" min="1" max="20" step="0.5"></label>
                     <label>Speed (ms): <input type="number" id="speed" value="1000" min="100" max="5000" step="100"></label>
                 </div>
 
                 <div class="control-group">
                     <h3>Events</h3>
                     <button id="trigger-flood-btn" class="btn warning">🌊 Trigger Flood</button>
-                    <button id="fail-node-btn" class="btn danger">⚠️ Fail Random Node</button>
-                    <button id="fail-gateway-btn" class="btn danger">📡 Fail Gateway</button>
+                    <p class="info-text">All nodes are uniform sensors with configurable range</p>
                 </div>
             </div>
 
             <div id="flood-controls" class="hidden">
                 <h3>Flood Location</h3>
                 <p>Click on the grid to trigger flood at that location, or use coordinates:</p>
-                <label>X: <input type="number" id="flood-x" value="25" min="0" max="49"></label>
+                <label>X: <input type="number" id="flood-x" value="50" min="0" max="99"></label>
                 <label>Y: <input type="number" id="flood-y" value="25" min="0" max="49"></label>
                 <label>Water Level: <input type="number" id="flood-level" value="2.5" min="1.0" max="5.0" step="0.1"></label>
                 <button id="confirm-flood-btn" class="btn warning">Confirm Flood</button>
@@ -65,12 +65,12 @@
                     <span id="current-tick" class="value">0</span>
                 </div>
                 <div class="status-item">
-                    <span class="label">Active Nodes</span>
+                    <span class="label">Total Sensors</span>
                     <span id="active-nodes" class="value">0</span>
                 </div>
                 <div class="status-item">
-                    <span class="label">Failed Nodes</span>
-                    <span id="failed-nodes" class="value">0</span>
+                    <span class="label">Central Server Messages</span>
+                    <span id="central-messages" class="value">0</span>
                 </div>
                 <div class="status-item">
                     <span class="label">Active Incidents</span>
@@ -106,21 +106,14 @@
                     <span>Active Sensor</span>
                 </div>
                 <div class="legend-item">
-                    <div class="legend-color relay-active"></div>
-                    <span>Active Relay</span>
-                </div>
-                <div class="legend-item">
                     <div class="legend-color node-failed"></div>
-                    <span>Failed Node</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color gateway-node"></div>
-                    <span>Gateway Connection</span>
+                    <span>Inactive Sensor</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-color flood-area"></div>
                     <span>Flood Area</span>
                 </div>
+                <div class="info-text">Grid: 100m × 50m | Central Server (off-map)</div>
             </div>
         </section>
 
@@ -144,9 +137,9 @@
                     <div class="metric-label">Control Messages</div>
                 </div>
                 <div class="metric-card">
-                    <h3>Network Resilience</h3>
-                    <div class="metric-value" id="resilience">100%</div>
-                    <div class="metric-label">Health Score</div>
+                    <h3>Grid Dimensions</h3>
+                    <div class="metric-value" id="grid-dimensions">100m×50m</div>
+                    <div class="metric-label">Network Size</div>
                 </div>
             </div>
 
@@ -163,14 +156,35 @@
             </div>
         </section>
 
-        <!-- Health Panel -->
-        <section id="health-panel" class="panel">
-            <h2>🏥 Network Health</h2>
-            <div id="health-summary"></div>
-            <div id="health-recommendations"></div>
+
+        <!-- Central Server Console -->
+        <section id="central-server-panel" class="panel">
+            <h2>💻 Central Server Console</h2>
+            <div class="server-stats">
+                <div class="stat-item">
+                    <span class="label">Messages Received:</span>
+                    <span id="server-msg-count" class="value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="label">Alert Messages:</span>
+                    <span id="server-alert-count" class="value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="label">Last Message:</span>
+                    <span id="server-last-msg" class="value">None</span>
+                </div>
+            </div>
+            <div class="server-controls">
+                <button id="clear-server-log" class="btn small">🗑️ Clear</button>
+                <input type="checkbox" id="server-auto-scroll" checked>
+                <label for="server-auto-scroll">Auto-scroll</label>
+            </div>
+            <div id="server-log-container">
+                <div id="server-log-content"></div>
+            </div>
         </section>
 
-        <!-- Log Panel -->
+        <!-- Simulation Log Panel -->
         <section id="log-panel" class="panel">
             <h2>📝 Simulation Log</h2>
             <div class="log-controls">

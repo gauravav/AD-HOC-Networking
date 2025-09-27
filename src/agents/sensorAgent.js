@@ -4,18 +4,18 @@ class SensorAgent {
   constructor(id, x, y, communicationRange = 5) {
     this.id = id;
     this.location = { x, y };
-    this.communicationRange = communicationRange;
+    this.communicationRange = communicationRange; // 5 meters
     this.batteryLevel = Math.random() * 0.3 + 0.7; // 70-100%
     this.waterLevel = 0;
     this.waterThreshold = 1.5; // meters
     this.isActive = true;
-    this.hasGatewayConnection = Math.random() < 0.1; // 10% have direct gateway access
 
     // Message handling
     this.messageBuffer = [];
     this.sentMessages = new Set();
     this.receivedMessages = new Set();
     this.neighbors = new Set();
+    this.neighborData = new Map(); // Store neighbor details
 
     // Timers
     this.helloInterval = null;
@@ -55,16 +55,35 @@ class SensorAgent {
       'HIGH'
     );
 
+    // Send to central server immediately
+    this.deliverToCentralServer(alert);
+
+    // Also broadcast to neighbors
     this.broadcastMessage(alert);
     return alert;
   }
 
   broadcastHello() {
+    // Collect neighbor data for central server
+    const neighborInfo = Array.from(this.neighborData.values()).map(neighbor => ({
+      id: neighbor.id,
+      location: neighbor.location,
+      batteryLevel: neighbor.batteryLevel,
+      distance: this.calculateDistance(neighbor.location),
+      lastSeen: neighbor.lastSeen
+    }));
+
     const hello = new HelloMessage(
       this.id,
       this.batteryLevel,
-      this.location
+      this.location,
+      neighborInfo
     );
+
+    // Always send to central server (100% chance)
+    if (Math.random() < 1) {
+      this.deliverToCentralServer(hello);
+    }
 
     this.broadcastMessage(hello);
   }
@@ -120,6 +139,14 @@ class SensorAgent {
   processHelloMessage(message, fromAgent) {
     this.neighbors.add(fromAgent.id);
 
+    // Store detailed neighbor information
+    this.neighborData.set(fromAgent.id, {
+      id: fromAgent.id,
+      location: fromAgent.location,
+      batteryLevel: fromAgent.batteryLevel,
+      lastSeen: Date.now()
+    });
+
     // Send ACK
     const ack = new AckMessage(this.id, message.id, 'RECEIVED');
     this.sendMessage(ack, fromAgent);
@@ -130,13 +157,11 @@ class SensorAgent {
     const ack = new AckMessage(this.id, message.id, 'RECEIVED');
     this.sendMessage(ack, fromAgent);
 
-    // If we have gateway connection, deliver immediately
-    if (this.hasGatewayConnection) {
-      this.deliverToGateway(message);
-    } else {
-      // Forward to neighbors (multi-hop)
-      this.forwardAlert(message);
-    }
+    // Deliver directly to central server
+    this.deliverToCentralServer(message);
+
+    // Also forward to neighbors for redundancy
+    this.forwardAlert(message);
   }
 
   processAckMessage(message) {
@@ -166,11 +191,11 @@ class SensorAgent {
     this.broadcastMessage(forwardedMessage);
   }
 
-  deliverToGateway(message) {
+  deliverToCentralServer(message) {
     this.messageBuffer.push({
       message,
       timestamp: Date.now(),
-      action: 'gateway_delivery'
+      action: 'central_server_delivery'
     });
   }
 
@@ -193,7 +218,6 @@ class SensorAgent {
       batteryLevel: this.batteryLevel,
       waterLevel: this.waterLevel,
       isActive: this.isActive,
-      hasGatewayConnection: this.hasGatewayConnection,
       neighborCount: this.neighbors.size,
       messageCount: this.messageBuffer.length
     };

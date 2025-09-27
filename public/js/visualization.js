@@ -2,8 +2,9 @@ class GridVisualization {
     constructor(canvasId) {
         this.canvas = document.getElementById(canvasId);
         this.ctx = this.canvas.getContext('2d');
-        this.gridSize = 50;
-        this.cellSize = 10;
+        this.gridWidth = 100; // 100 meters
+        this.gridHeight = 50; // 50 meters
+        this.cellSize = 8; // Smaller cells for larger grid
         this.zoom = 1;
         this.offsetX = 0;
         this.offsetY = 0;
@@ -29,11 +30,15 @@ class GridVisualization {
     }
 
     centerView() {
-        const totalGridWidth = this.gridSize * this.cellSize * this.zoom;
-        const totalGridHeight = this.gridSize * this.cellSize * this.zoom;
+        const totalGridWidth = this.gridWidth * this.cellSize * this.zoom;
+        const totalGridHeight = this.gridHeight * this.cellSize * this.zoom;
 
-        this.offsetX = (this.canvas.width - totalGridWidth) / 2;
-        this.offsetY = (this.canvas.height - totalGridHeight) / 2;
+        // Leave space for axis labels
+        const marginLeft = 60;
+        const marginBottom = 60;
+
+        this.offsetX = marginLeft + (this.canvas.width - totalGridWidth - marginLeft) / 2;
+        this.offsetY = (this.canvas.height - totalGridHeight - marginBottom) / 2;
     }
 
     setupEventListeners() {
@@ -44,8 +49,8 @@ class GridVisualization {
             const y = e.clientY - rect.top;
 
             const gridPos = this.screenToGrid(x, y);
-            if (gridPos.x >= 0 && gridPos.x < this.gridSize &&
-                gridPos.y >= 0 && gridPos.y < this.gridSize) {
+            if (gridPos.x >= 0 && gridPos.x < this.gridWidth &&
+                gridPos.y >= 0 && gridPos.y < this.gridHeight) {
                 this.onGridClick(gridPos.x, gridPos.y);
             }
         });
@@ -128,6 +133,9 @@ class GridVisualization {
         // Draw background grid
         this.drawBackgroundGrid();
 
+        // Draw axis labels
+        this.drawAxisLabels();
+
         // Draw flood areas
         this.drawFloodAreas();
 
@@ -149,22 +157,69 @@ class GridVisualization {
         const cellSize = this.cellSize * this.zoom;
 
         // Vertical lines
-        for (let x = 0; x <= this.gridSize; x++) {
+        for (let x = 0; x <= this.gridWidth; x++) {
             const screenX = this.offsetX + (x * cellSize);
             this.ctx.beginPath();
             this.ctx.moveTo(screenX, this.offsetY);
-            this.ctx.lineTo(screenX, this.offsetY + (this.gridSize * cellSize));
+            this.ctx.lineTo(screenX, this.offsetY + (this.gridHeight * cellSize));
             this.ctx.stroke();
         }
 
         // Horizontal lines
-        for (let y = 0; y <= this.gridSize; y++) {
+        for (let y = 0; y <= this.gridHeight; y++) {
             const screenY = this.offsetY + (y * cellSize);
             this.ctx.beginPath();
             this.ctx.moveTo(this.offsetX, screenY);
-            this.ctx.lineTo(this.offsetX + (this.gridSize * cellSize), screenY);
+            this.ctx.lineTo(this.offsetX + (this.gridWidth * cellSize), screenY);
             this.ctx.stroke();
         }
+    }
+
+    drawAxisLabels() {
+        this.ctx.fillStyle = '#495057';
+        this.ctx.font = `${Math.max(10, this.zoom * 8)}px Arial`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+
+        const cellSize = this.cellSize * this.zoom;
+        const labelStep = Math.max(1, Math.floor(10 / this.zoom)); // Show fewer labels when zoomed out
+
+        // X-axis labels (bottom)
+        for (let x = 0; x < this.gridWidth; x += labelStep) {
+            const screenX = this.offsetX + (x * cellSize) + cellSize / 2;
+            const screenY = this.offsetY + (this.gridHeight * cellSize) + 15;
+            if (screenX > 0 && screenX < this.canvas.width) {
+                this.ctx.fillText(x.toString(), screenX, screenY);
+            }
+        }
+
+        // Y-axis labels (left)
+        this.ctx.textAlign = 'right';
+        for (let y = 0; y < this.gridHeight; y += labelStep) {
+            const screenX = this.offsetX - 8;
+            const screenY = this.offsetY + (y * cellSize) + cellSize / 2;
+            if (screenY > 0 && screenY < this.canvas.height) {
+                this.ctx.fillText(y.toString(), screenX, screenY);
+            }
+        }
+
+        // Axis titles
+        this.ctx.fillStyle = '#343a40';
+        this.ctx.font = `${Math.max(12, this.zoom * 10)}px Arial`;
+        this.ctx.textAlign = 'center';
+
+        // X-axis title
+        this.ctx.fillText('X (meters)',
+            this.offsetX + (this.gridWidth * cellSize) / 2,
+            this.offsetY + (this.gridHeight * cellSize) + 35
+        );
+
+        // Y-axis title
+        this.ctx.save();
+        this.ctx.translate(this.offsetX - 35, this.offsetY + (this.gridHeight * cellSize) / 2);
+        this.ctx.rotate(-Math.PI / 2);
+        this.ctx.fillText('Y (meters)', 0, 0);
+        this.ctx.restore();
     }
 
     drawFloodAreas() {
@@ -193,8 +248,8 @@ class GridVisualization {
         const cellSize = this.cellSize * this.zoom;
         const nodeSize = Math.max(3, cellSize * 0.6);
 
-        for (let x = 0; x < this.gridSize; x++) {
-            for (let y = 0; y < this.gridSize; y++) {
+        for (let x = 0; x < this.gridWidth; x++) {
+            for (let y = 0; y < this.gridHeight; y++) {
                 const node = this.gridData[x][y];
                 if (!node) continue;
 
@@ -211,22 +266,7 @@ class GridVisualization {
                 this.ctx.arc(centerX, centerY, nodeSize / 2, 0, 2 * Math.PI);
                 this.ctx.fill();
 
-                // Draw border for special nodes
-                if (node.hasGateway) {
-                    this.ctx.strokeStyle = '#f39c12';
-                    this.ctx.lineWidth = 3;
-                    this.ctx.beginPath();
-                    this.ctx.arc(centerX, centerY, nodeSize / 2 + 2, 0, 2 * Math.PI);
-                    this.ctx.stroke();
-                }
-
-                if (node.type === 'relay') {
-                    this.ctx.strokeStyle = '#2c3e50';
-                    this.ctx.lineWidth = 2;
-                    this.ctx.beginPath();
-                    this.ctx.arc(centerX, centerY, nodeSize / 2 + 1, 0, 2 * Math.PI);
-                    this.ctx.stroke();
-                }
+                // All nodes are sensors now - no special borders needed
 
                 // Draw labels if enabled and zoomed in
                 if (this.showLabels && this.zoom > 1.5) {
@@ -243,9 +283,10 @@ class GridVisualization {
         this.ctx.lineWidth = 1;
 
         const cellSize = this.cellSize * this.zoom;
+        const commRange = 5; // 5-meter communication range for all nodes
 
-        for (let x = 0; x < this.gridSize; x++) {
-            for (let y = 0; y < this.gridSize; y++) {
+        for (let x = 0; x < this.gridWidth; x++) {
+            for (let y = 0; y < this.gridHeight; y++) {
                 const node = this.gridData[x][y];
                 if (!node || node.status !== 'active') continue;
 
@@ -253,23 +294,21 @@ class GridVisualization {
                 const center1X = pos1.x + cellSize / 2;
                 const center1Y = pos1.y + cellSize / 2;
 
-                // Draw connections to nearby nodes (simplified)
-                const range = node.type === 'relay' ? 8 : 5;
-
-                for (let dx = -range; dx <= range; dx++) {
-                    for (let dy = -range; dy <= range; dy++) {
+                // Draw connections to nearby nodes within 5-meter range
+                for (let dx = -commRange; dx <= commRange; dx++) {
+                    for (let dy = -commRange; dy <= commRange; dy++) {
                         if (dx === 0 && dy === 0) continue;
 
                         const nx = x + dx;
                         const ny = y + dy;
 
-                        if (nx >= 0 && nx < this.gridSize &&
-                            ny >= 0 && ny < this.gridSize) {
+                        if (nx >= 0 && nx < this.gridWidth &&
+                            ny >= 0 && ny < this.gridHeight) {
 
                             const neighbor = this.gridData[nx][ny];
                             if (neighbor && neighbor.status === 'active') {
                                 const distance = Math.sqrt(dx * dx + dy * dy);
-                                if (distance <= range) {
+                                if (distance <= commRange) {
                                     const pos2 = this.gridToScreen(nx, ny);
                                     const center2X = pos2.x + cellSize / 2;
                                     const center2Y = pos2.y + cellSize / 2;
@@ -290,8 +329,8 @@ class GridVisualization {
     getNodeColor(node) {
         switch (this.viewMode) {
             case 'status':
-                if (node.status === 'failed') return '#e74c3c';
-                return node.type === 'relay' ? '#3498db' : '#2ecc71';
+                if (node.status === 'inactive') return '#e74c3c';
+                return '#2ecc71'; // All active sensors are green
 
             case 'battery':
                 const batteryLevel = node.batteryLevel || 0;
@@ -344,8 +383,8 @@ class GridVisualization {
     }
 
     showTooltip(gridPos, mouseEvent) {
-        if (!this.gridData || gridPos.x < 0 || gridPos.x >= this.gridSize ||
-            gridPos.y < 0 || gridPos.y >= this.gridSize) {
+        if (!this.gridData || gridPos.x < 0 || gridPos.x >= this.gridWidth ||
+            gridPos.y < 0 || gridPos.y >= this.gridHeight) {
             this.hideTooltip();
             return;
         }
@@ -378,12 +417,12 @@ class GridVisualization {
 
         tooltip.innerHTML = `
             <strong>${node.id}</strong><br>
-            Type: ${node.type}<br>
+            Type: Sensor<br>
             Status: ${node.status}<br>
             Battery: ${Math.round((node.batteryLevel || 0) * 100)}%<br>
             Water: ${(node.waterLevel || 0).toFixed(1)}m<br>
             Neighbors: ${node.neighbors || 0}<br>
-            ${node.hasGateway ? 'Gateway: Yes' : ''}
+            Range: 5m
         `;
 
         tooltip.style.left = mouseEvent.pageX + 10 + 'px';
