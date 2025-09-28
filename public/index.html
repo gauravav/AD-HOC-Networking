@@ -31,12 +31,18 @@
                     <label>Grid Height (m): <input type="number" id="grid-height" value="50" min="30" max="100"></label>
                     <label>Sensor Count: <input type="number" id="sensor-count" value="100" min="10" max="500"></label>
                     <label>Communication Range (m): <input type="number" id="comm-range" value="5" min="1" max="20" step="0.5"></label>
+                    <label>Max Neighbors: <input type="number" id="max-neighbors" value="5" min="1" max="20"></label>
                     <label>Speed (ms): <input type="number" id="speed" value="1000" min="100" max="5000" step="100"></label>
                 </div>
 
                 <div class="control-group">
                     <h3>Events</h3>
                     <button id="trigger-flood-btn" class="btn warning">🌊 Trigger Flood</button>
+                    <button id="fail-node-btn" class="btn danger">💥 Fail Random Node</button>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="enable-random-floods" checked>
+                        Enable Random Floods (2% chance per tick)
+                    </label>
                     <p class="info-text">All nodes are uniform sensors with configurable range</p>
                 </div>
             </div>

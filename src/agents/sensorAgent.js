@@ -1,10 +1,11 @@
 const { HelloMessage, AlertMessage, AckMessage, MessageTypes } = require('../messages');
 
 class SensorAgent {
-  constructor(id, x, y, communicationRange = 5) {
+  constructor(id, x, y, communicationRange = 5, maxNeighbors = 5) {
     this.id = id;
     this.location = { x, y };
     this.communicationRange = communicationRange; // 5 meters
+    this.maxNeighbors = maxNeighbors; // max number of neighbors to maintain
     this.batteryLevel = Math.random() * 0.3 + 0.7; // 70-100%
     this.waterLevel = 0;
     this.waterThreshold = 1.5; // meters
@@ -64,20 +65,14 @@ class SensorAgent {
   }
 
   broadcastHello() {
-    // Collect neighbor data for central server
-    const neighborInfo = Array.from(this.neighborData.values()).map(neighbor => ({
-      id: neighbor.id,
-      location: neighbor.location,
-      batteryLevel: neighbor.batteryLevel,
-      distance: this.calculateDistance(neighbor.location),
-      lastSeen: neighbor.lastSeen
-    }));
+    // Get only the nearest neighbors up to maxNeighbors limit
+    const nearestNeighbors = this.getNearestNeighbors();
 
     const hello = new HelloMessage(
       this.id,
       this.batteryLevel,
       this.location,
-      neighborInfo
+      nearestNeighbors
     );
 
     // Always send to central server (100% chance)
@@ -137,14 +132,25 @@ class SensorAgent {
   }
 
   processHelloMessage(message, fromAgent) {
-    this.neighbors.add(fromAgent.id);
+    // Calculate distance to this neighbor
+    const distance = this.calculateDistance(fromAgent.location);
 
     // Store detailed neighbor information
     this.neighborData.set(fromAgent.id, {
       id: fromAgent.id,
       location: fromAgent.location,
       batteryLevel: fromAgent.batteryLevel,
-      lastSeen: Date.now()
+      lastSeen: Date.now(),
+      distance: distance
+    });
+
+    // Limit neighbors to maxNeighbors nearest ones
+    this.pruneNeighbors();
+
+    // Update neighbors set based on current neighbor data
+    this.neighbors.clear();
+    this.neighborData.forEach((data, id) => {
+      this.neighbors.add(id);
     });
 
     // Send ACK
@@ -209,6 +215,50 @@ class SensorAgent {
     const dx = this.location.x - otherLocation.x;
     const dy = this.location.y - otherLocation.y;
     return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  getNearestNeighbors() {
+    // Convert neighbor data to array with distances
+    const neighborsWithDistance = Array.from(this.neighborData.values()).map(neighbor => ({
+      id: neighbor.id,
+      location: neighbor.location,
+      batteryLevel: neighbor.batteryLevel,
+      distance: neighbor.distance || this.calculateDistance(neighbor.location),
+      lastSeen: neighbor.lastSeen
+    }));
+
+    // Sort by distance (nearest first) and limit to maxNeighbors
+    return neighborsWithDistance
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, this.maxNeighbors);
+  }
+
+  pruneNeighbors() {
+    // If we have more neighbors than allowed, keep only the nearest ones
+    if (this.neighborData.size > this.maxNeighbors) {
+      const allNeighbors = Array.from(this.neighborData.entries()).map(([id, data]) => ({
+        id,
+        ...data,
+        distance: data.distance || this.calculateDistance(data.location)
+      }));
+
+      // Sort by distance and keep only the nearest maxNeighbors
+      const nearestNeighbors = allNeighbors
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, this.maxNeighbors);
+
+      // Clear and rebuild neighbor data with only nearest neighbors
+      this.neighborData.clear();
+      nearestNeighbors.forEach(neighbor => {
+        this.neighborData.set(neighbor.id, {
+          id: neighbor.id,
+          location: neighbor.location,
+          batteryLevel: neighbor.batteryLevel,
+          lastSeen: neighbor.lastSeen,
+          distance: neighbor.distance
+        });
+      });
+    }
   }
 
   getStatus() {

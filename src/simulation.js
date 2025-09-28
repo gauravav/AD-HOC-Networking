@@ -9,6 +9,8 @@ class FloodWatchSimulation {
       gridHeight: config.gridHeight || 50, // 50 meters
       sensorCount: config.sensorCount || 100,
       communicationRange: config.communicationRange || 5, // meters
+      maxNeighbors: config.maxNeighbors || 5, // max neighbors per node
+      enableRandomFloods: config.enableRandomFloods !== undefined ? config.enableRandomFloods : true, // enable random floods
       simulationSpeed: config.simulationSpeed || 1000, // ms per tick
       ...config
     };
@@ -50,10 +52,10 @@ class FloodWatchSimulation {
     // Generate positions for all nodes
     const positions = this.generateNodePositions(totalNodes);
 
-    // Create sensor agents with configurable communication range
+    // Create sensor agents with configurable communication range and max neighbors
     for (let i = 0; i < totalNodes; i++) {
       const pos = positions[i];
-      const sensor = new SensorAgent(`SENSOR-${i}`, pos.x, pos.y, this.config.communicationRange);
+      const sensor = new SensorAgent(`SENSOR-${i}`, pos.x, pos.y, this.config.communicationRange, this.config.maxNeighbors);
       this.sensors.push(sensor);
       this.grid[pos.x][pos.y] = sensor;
     }
@@ -88,13 +90,37 @@ class FloodWatchSimulation {
 
   discoverNeighbors() {
     for (const node of this.sensors) {
+      // Find all potential neighbors within communication range
+      const potentialNeighbors = [];
+
       for (const otherNode of this.sensors) {
         if (node.id !== otherNode.id) {
           const distance = node.calculateDistance(otherNode.location);
           if (distance <= node.communicationRange) {
-            node.neighbors.add(otherNode.id);
+            potentialNeighbors.push({
+              node: otherNode,
+              distance: distance
+            });
           }
         }
+      }
+
+      // Sort by distance and take only the nearest maxNeighbors
+      const nearestNeighbors = potentialNeighbors
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, node.maxNeighbors);
+
+      // Add nearest neighbors to the node's neighbor data
+      for (const neighborInfo of nearestNeighbors) {
+        const otherNode = neighborInfo.node;
+        node.neighbors.add(otherNode.id);
+        node.neighborData.set(otherNode.id, {
+          id: otherNode.id,
+          location: otherNode.location,
+          batteryLevel: otherNode.batteryLevel,
+          lastSeen: Date.now(),
+          distance: neighborInfo.distance
+        });
       }
     }
   }
@@ -139,8 +165,8 @@ class FloodWatchSimulation {
     // Update metrics
     this.updateMetrics();
 
-    // Random flood events
-    if (Math.random() < 0.02) { // 2% chance per tick
+    // Random flood events (only if enabled)
+    if (this.config.enableRandomFloods && Math.random() < 0.02) { // 2% chance per tick
       this.log('🌊 Auto flood event triggered randomly', { type: 'AUTO_FLOOD' });
       this.triggerRandomFlood();
     }
@@ -244,6 +270,11 @@ class FloodWatchSimulation {
       timestamp: Date.now()
     });
 
+    // Track node activity for failure detection
+    if (message.type === MessageTypes.HELLO) {
+      this.coordinationAgent.recordNodeActivity(sender.id);
+    }
+
     // Enhanced logging for HELLO messages with neighbor data
     if (message.type === MessageTypes.HELLO && message.data.neighbors) {
       const neighborCount = message.data.neighbors.length;
@@ -270,10 +301,40 @@ class FloodWatchSimulation {
 
 
   processIncidentCoordination() {
+    // Run failure detection
+    const detectedFailures = this.coordinationAgent.detectNodeFailures(this.sensors);
+
+    // Log newly detected failures
+    if (detectedFailures.length > 0) {
+      const newFailures = detectedFailures.filter(failure =>
+        Date.now() - failure.detectedAt < 10000 // Within last 10 seconds
+      );
+
+      newFailures.forEach(failure => {
+        this.log(`🔍 Node failure detected: ${failure.nodeId} | Method: ${failure.confirmationMethod} | Evidence: ${failure.evidenceSources.length} sources`, {
+          nodeId: failure.nodeId,
+          confirmationMethod: failure.confirmationMethod,
+          evidenceSources: failure.evidenceSources,
+          type: 'FAILURE_DETECTION'
+        });
+      });
+    }
+
+    this.coordinationAgent.clearOldFailures();
+
     // Let coordination agent generate reports
     const report = this.coordinationAgent.generateIncidentReports();
     if (report) {
       this.emit('incident-report', report);
+    }
+
+    // Send node failure reports
+    const nodeFailures = this.coordinationAgent.getNodeFailures();
+    if (nodeFailures.length > 0) {
+      this.emit('node-failure-report', {
+        timestamp: Date.now(),
+        failures: nodeFailures
+      });
     }
   }
 
@@ -369,6 +430,40 @@ class FloodWatchSimulation {
       waterLevel,
       affectedNodes
     });
+  }
+
+  failRandomNode() {
+    // Find active nodes
+    const activeNodes = this.sensors.filter(node => node.isActive);
+
+    if (activeNodes.length === 0) {
+      this.log('💥 No active nodes to fail');
+      return;
+    }
+
+    // Select a random active node
+    const randomIndex = Math.floor(Math.random() * activeNodes.length);
+    const nodeToFail = activeNodes[randomIndex];
+
+    // Fail the node
+    nodeToFail.fail();
+    this.metrics.nodeFailures++;
+
+    this.log(`💥 Node ${nodeToFail.id} failed at location (${nodeToFail.location.x}, ${nodeToFail.location.y})`, {
+      nodeId: nodeToFail.id,
+      location: nodeToFail.location,
+      type: 'NODE_FAILURE'
+    });
+
+    // Emit node failure event
+    this.emit('node-failure', {
+      nodeId: nodeToFail.id,
+      location: nodeToFail.location,
+      timestamp: Date.now()
+    });
+
+    // Start failure detection process
+    this.coordinationAgent.reportNodeFailure(nodeToFail.id, nodeToFail.location);
   }
 
   getStatus() {

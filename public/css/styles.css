@@ -599,3 +599,30 @@ footer {
     padding: 0.1rem 0.3rem;
     border-radius: 3px;
 }
+
+/* Node Failure Specific Styles */
+.failure-incident {
+    border-left: 4px solid #f44336 !important;
+    background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%) !important;
+}
+
+.evidence-list {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.evidence-list li {
+    margin: 0.2rem 0;
+    line-height: 1.4;
+}
+
+.flood-incident {
+    border-left: 4px solid #2196F3 !important;
+}
+
+.severity-critical {
+    background: #f44336 !important;
+}
+}
