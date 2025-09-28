@@ -2,7 +2,7 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
-const FloodWatchSimulation = require('./src/simulation');
+const FederationSimulation = require('./src/federationSimulation');
 
 const app = express();
 const server = http.createServer(app);
@@ -23,7 +23,7 @@ io.on('connection', (socket) => {
     if (simulation) {
       simulation.stop();
     }
-    simulation = new FloodWatchSimulation(config, io);
+    simulation = new FederationSimulation(config, io);
     simulation.start();
     socket.emit('simulation-started');
   });

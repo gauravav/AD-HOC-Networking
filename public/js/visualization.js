@@ -441,15 +441,21 @@ class GridVisualization {
         }
     }
 
-    addFloodArea(x, y, radius, intensity) {
-        this.floodAreas.push({ x, y, radius, intensity, timestamp: Date.now(), id: `${x}-${y}` });
-        // Remove old flood areas after 30 seconds
+    addFloodArea(x, y, radius, intensity, duration = 30000) {
+        const floodId = `${x}-${y}`;
+        this.floodAreas.push({ x, y, radius, intensity, timestamp: Date.now(), id: floodId, duration });
+
+        // Remove flood area after specified duration + 20% recede time
+        const totalDuration = duration * 1.2;
         setTimeout(() => {
-            this.floodAreas = this.floodAreas.filter(flood =>
-                Date.now() - flood.timestamp < 30000
-            );
-            this.draw();
-        }, 30000);
+            this.removeFloodArea(floodId);
+        }, totalDuration);
+
+        this.draw();
+    }
+
+    removeFloodArea(floodId) {
+        this.floodAreas = this.floodAreas.filter(flood => flood.id !== floodId);
         this.draw();
     }
 

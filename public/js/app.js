@@ -19,7 +19,7 @@ class FloodWatchApp {
 
         // Node failure tracking disabled
 
-        this.gridVis = new GridVisualization('grid-canvas');
+        this.dualGridVis = new DualGridVisualization('flat-grid-canvas', 'federation-grid-canvas');
         this.metricsChart = new MetricsChart('metrics-chart');
 
         this.initializeEventListeners();
@@ -66,6 +66,9 @@ class FloodWatchApp {
         });
 
         // Random flood toggle removed
+
+        // Dual Grid Controls
+        this.setupDualGridControls();
 
         // Log controls
         document.getElementById('clear-log').addEventListener('click', () => {
@@ -116,6 +119,10 @@ class FloodWatchApp {
             this.handleFloodUpdate(data);
         });
 
+        this.socket.on('flood-receded', (data) => {
+            this.handleFloodReceded(data);
+        });
+
         // Node and gateway events removed
 
         this.socket.on('incident-report', (data) => {
@@ -128,6 +135,71 @@ class FloodWatchApp {
         });
 
         // Node failure event handlers disabled
+    }
+
+    setupDualGridControls() {
+        // Architecture toggle controls
+        const archToggle = document.querySelectorAll('input[name="architecture"]');
+        archToggle.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                this.toggleArchitectureView(e.target.value);
+            });
+        });
+
+        // Flat architecture controls
+        document.getElementById('flat-zoom-in')?.addEventListener('click', () => {
+            this.dualGridVis.zoom(1.2);
+        });
+
+        document.getElementById('flat-zoom-out')?.addEventListener('click', () => {
+            this.dualGridVis.zoom(0.8);
+        });
+
+        document.getElementById('flat-toggle-labels')?.addEventListener('click', () => {
+            this.dualGridVis.toggleLabels();
+        });
+
+        document.getElementById('flat-view-mode')?.addEventListener('change', (e) => {
+            this.dualGridVis.setViewMode(e.target.value);
+        });
+
+        // Federation architecture controls
+        document.getElementById('fed-zoom-in')?.addEventListener('click', () => {
+            this.dualGridVis.zoom(1.2);
+        });
+
+        document.getElementById('fed-zoom-out')?.addEventListener('click', () => {
+            this.dualGridVis.zoom(0.8);
+        });
+
+        document.getElementById('fed-toggle-labels')?.addEventListener('click', () => {
+            this.dualGridVis.toggleLabels();
+        });
+
+        document.getElementById('fed-view-mode')?.addEventListener('change', (e) => {
+            this.dualGridVis.setViewMode(e.target.value);
+        });
+    }
+
+    toggleArchitectureView(view) {
+        const flatSection = document.getElementById('flat-section');
+        const fedSection = document.getElementById('federation-section');
+
+        switch (view) {
+            case 'flat':
+                flatSection.style.display = 'block';
+                fedSection.style.display = 'none';
+                break;
+            case 'federation':
+                flatSection.style.display = 'none';
+                fedSection.style.display = 'block';
+                break;
+            case 'both':
+            default:
+                flatSection.style.display = 'block';
+                fedSection.style.display = 'block';
+                break;
+        }
     }
 
     startSimulation() {
@@ -155,8 +227,8 @@ class FloodWatchApp {
             this.clearServerLog();
             this.clearIncidents();
             this.clearMetrics();
-            this.gridVis.floodAreas = [];
-            this.gridVis.draw();
+            this.dualGridVis.floodAreas = [];
+            this.dualGridVis.draw();
         }, 500);
     }
 
@@ -217,8 +289,8 @@ class FloodWatchApp {
         // Update metrics
         this.updateMetrics(status.metrics);
 
-        // Update grid visualization
-        this.gridVis.updateGrid(gridState);
+        // Update dual grid visualization
+        this.dualGridVis.updateGrids(gridState);
 
         // Update incidents (if new report available)
         if (incidentReport) {
@@ -227,23 +299,48 @@ class FloodWatchApp {
     }
 
     updateMetrics(metrics) {
-        // Update metric cards
-        document.getElementById('delivery-rate').textContent =
-            Math.round(metrics.deliverySuccessRate || 0) + '%';
-        document.getElementById('avg-delay').textContent =
-            Math.round(metrics.averageDelay || 0) + 'ms';
-        document.getElementById('network-overhead').textContent =
-            Math.round(metrics.networkOverhead || 0) + '%';
+        // Update flat vs federation statistics
+        if (metrics.flat && metrics.federation) {
+            this.updateDualMetrics(metrics);
+        } else {
+            // Fallback to single architecture metrics
+            document.getElementById('delivery-rate').textContent =
+                Math.round(metrics.deliverySuccessRate || 0) + '%';
+            document.getElementById('avg-delay').textContent =
+                Math.round(metrics.averageDelay || 0) + 'ms';
+            document.getElementById('network-overhead').textContent =
+                Math.round(metrics.networkOverhead || 0) + '%';
+        }
+
         document.getElementById('grid-dimensions').textContent =
             `${this.currentConfig.gridWidth || 25}m x ${this.currentConfig.gridHeight || 25}m`;
 
-        // Update chart
+        // Update chart with comparison data
         this.metricsChart.addDataPoint({
-            deliverySuccessRate: metrics.deliverySuccessRate || 0,
-            averageDelay: metrics.averageDelay || 0,
+            deliverySuccessRate: metrics.deliverySuccessRate || (metrics.flat?.reliability * 100) || 0,
+            averageDelay: metrics.averageDelay || metrics.federation?.averageLatency || 0,
             networkOverhead: metrics.networkOverhead || 0,
             networkResilience: 100
         });
+    }
+
+    updateDualMetrics(metrics) {
+        const { flat, federation, comparison } = metrics;
+
+        // Update architecture-specific stats
+        document.getElementById('flat-direct-routes').textContent = flat.directRoutes || 0;
+        document.getElementById('flat-total-hops').textContent = flat.totalMessages || 0;
+
+        document.getElementById('fed-gateway-count').textContent = federation.gatewayCount || 0;
+        document.getElementById('fed-avg-hops').textContent = federation.averageHops.toFixed(1) || '0.0';
+
+        // Update main metrics with comparison
+        document.getElementById('delivery-rate').textContent =
+            `F: ${Math.round(flat.reliability * 100)}% | Fed: ${Math.round(federation.reliability * 100)}%`;
+        document.getElementById('avg-delay').textContent =
+            `F: ${flat.averageLatency}ms | Fed: ${Math.round(federation.averageLatency)}ms`;
+        document.getElementById('network-overhead').textContent =
+            `Hops: F:1 | Fed:${federation.averageHops.toFixed(1)}`;
     }
 
 
@@ -300,24 +397,34 @@ class FloodWatchApp {
     handleFloodEvent(data) {
         if (data.type === 'gradual') {
             this.logMessage(`Gradual flood started at (${data.epicenter.x}, ${data.epicenter.y}) - will reach ${data.maxWaterLevel}m over ${data.duration}s`, 'warning');
+            // Add initial flood visualization with specified duration
+            this.dualGridVis.addFloodArea(data.epicenter.x, data.epicenter.y, 5, data.waterLevel / 5, data.duration * 1000);
         } else {
             this.logMessage(`Flood detected at (${data.epicenter.x}, ${data.epicenter.y}) - ${data.affectedNodes.length} nodes affected`, 'warning');
+            // Add flood visualization with default duration for instant floods
+            this.dualGridVis.addFloodArea(data.epicenter.x, data.epicenter.y, 5, data.waterLevel / 5);
         }
-
-        // Add initial flood visualization
-        this.gridVis.addFloodArea(data.epicenter.x, data.epicenter.y, 5, data.waterLevel / 5);
     }
 
     handleFloodUpdate(data) {
         // Update flood visualization with current progress
         const intensity = data.currentWaterLevel / data.maxWaterLevel;
-        this.gridVis.updateFloodArea(data.epicenter.x, data.epicenter.y, 5, intensity);
+        this.dualGridVis.updateFloodArea(data.epicenter.x, data.epicenter.y, 5, intensity);
 
         // Log progress updates occasionally
         const progress = Math.round(data.progress * 100);
         if (progress % 25 === 0 && progress > 0) { // Log at 25%, 50%, 75%, 100%
             this.logMessage(`Flood at (${data.epicenter.x}, ${data.epicenter.y}) - ${progress}% complete (${data.currentWaterLevel.toFixed(1)}m)`, 'info');
         }
+    }
+
+    handleFloodReceded(data) {
+        // Remove flood visualization from map
+        const floodId = `${data.epicenter.x}-${data.epicenter.y}`;
+        this.dualGridVis.removeFloodArea(floodId);
+
+        // Log flood completion
+        this.logMessage(`Flood at (${data.epicenter.x}, ${data.epicenter.y}) has completely receded after ${data.duration}s`, 'info');
     }
 
 

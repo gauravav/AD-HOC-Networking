@@ -459,6 +459,13 @@ class FloodWatchSimulation {
           type: 'GRADUAL_FLOOD_RECEDED'
         });
 
+        // Emit flood-receded event for frontend
+        this.emit('flood-receded', {
+          floodId: floodId,
+          epicenter: flood.epicenter,
+          duration: Math.round(elapsedTime / 1000)
+        });
+
         // Set all affected nodes back to 0 water level
         for (const node of this.sensors) {
           const distance = Math.sqrt(

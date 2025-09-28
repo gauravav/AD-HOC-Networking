@@ -86,37 +86,106 @@
             </div>
         </section>
 
-        <!-- Grid Visualization -->
-        <section id="grid-panel" class="panel">
-            <h2>🗺️ Network Grid</h2>
-            <div class="grid-controls">
-                <button id="zoom-in" class="btn small">🔍+</button>
-                <button id="zoom-out" class="btn small">🔍-</button>
-                <button id="toggle-labels" class="btn small">🏷️ Labels</button>
-                <select id="view-mode">
-                    <option value="status">Node Status</option>
-                    <option value="battery">Battery Level</option>
-                    <option value="water">Water Level</option>
-                    <option value="connectivity">Connectivity</option>
-                </select>
+        <!-- Dual Architecture Visualization -->
+        <section id="dual-grid-panel" class="panel wide-panel">
+            <h2>🗺️ Network Architecture Comparison</h2>
+
+            <!-- Architecture Toggle -->
+            <div class="architecture-toggle">
+                <label>
+                    <input type="radio" name="architecture" value="both" checked>
+                    <span>Both Architectures</span>
+                </label>
+                <label>
+                    <input type="radio" name="architecture" value="flat">
+                    <span>Flat Only</span>
+                </label>
+                <label>
+                    <input type="radio" name="architecture" value="federation">
+                    <span>Federation Only</span>
+                </label>
             </div>
-            <div id="grid-container">
-                <canvas id="grid-canvas"></canvas>
+
+            <div class="dual-grid-container">
+                <!-- Flat Architecture -->
+                <div class="grid-section" id="flat-section">
+                    <h3>📡 Flat Architecture</h3>
+                    <p class="architecture-desc">Direct sensor-to-server communication</p>
+                    <div class="grid-controls">
+                        <button id="flat-zoom-in" class="btn small">🔍+</button>
+                        <button id="flat-zoom-out" class="btn small">🔍-</button>
+                        <button id="flat-toggle-labels" class="btn small">🏷️ Labels</button>
+                        <select id="flat-view-mode">
+                            <option value="status">Node Status</option>
+                            <option value="battery">Battery Level</option>
+                            <option value="water">Water Level</option>
+                            <option value="connectivity">Connectivity</option>
+                        </select>
+                    </div>
+                    <div class="grid-container">
+                        <canvas id="flat-grid-canvas"></canvas>
+                    </div>
+                    <div class="architecture-stats">
+                        <div class="stat-item">
+                            <span>Direct Routes:</span>
+                            <span id="flat-direct-routes">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>Total Hops:</span>
+                            <span id="flat-total-hops">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Federation Architecture -->
+                <div class="grid-section" id="federation-section">
+                    <h3>🏗️ Federation Architecture</h3>
+                    <p class="architecture-desc">Hierarchical communication through gateways</p>
+                    <div class="grid-controls">
+                        <button id="fed-zoom-in" class="btn small">🔍+</button>
+                        <button id="fed-zoom-out" class="btn small">🔍-</button>
+                        <button id="fed-toggle-labels" class="btn small">🏷️ Labels</button>
+                        <select id="fed-view-mode">
+                            <option value="status">Node Status</option>
+                            <option value="battery">Battery Level</option>
+                            <option value="water">Water Level</option>
+                            <option value="connectivity">Connectivity</option>
+                        </select>
+                    </div>
+                    <div class="grid-container">
+                        <canvas id="federation-grid-canvas"></canvas>
+                    </div>
+                    <div class="architecture-stats">
+                        <div class="stat-item">
+                            <span>Gateways:</span>
+                            <span id="fed-gateway-count">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>Avg Hops:</span>
+                            <span id="fed-avg-hops">0</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div id="grid-legend">
+
+            <div id="shared-legend">
                 <div class="legend-item">
                     <div class="legend-color sensor-active"></div>
                     <span>Active Sensor</span>
                 </div>
                 <div class="legend-item">
+                    <div class="legend-color gateway-node"></div>
+                    <span>Gateway Node</span>
+                </div>
+                <div class="legend-item">
                     <div class="legend-color node-failed"></div>
-                    <span>Inactive Sensor</span>
+                    <span>Inactive Node</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-color flood-area"></div>
                     <span>Flood Area</span>
                 </div>
-                <div class="info-text">Grid: 25m × 25m | Central Server (off-map)</div>
+                <div class="info-text">Grid: 25m × 25m | Central Server (off-map) | Real-time comparison</div>
             </div>
         </section>
 
@@ -207,6 +276,7 @@
     </footer>
 
     <script src="js/visualization.js"></script>
+    <script src="js/dualVisualization.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
