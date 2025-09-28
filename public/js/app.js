@@ -7,6 +7,8 @@ class FloodWatchApp {
             gridHeight: 50,
             sensorCount: 100,
             communicationRange: 5,
+            maxNeighbors: 5,
+            enableRandomFloods: true,
             simulationSpeed: 1000
         };
 
@@ -15,6 +17,8 @@ class FloodWatchApp {
             alertMessages: 0,
             lastMessage: null
         };
+
+        this.currentNodeFailures = [];
 
         this.gridVis = new GridVisualization('grid-canvas');
         this.metricsChart = new MetricsChart('metrics-chart');
@@ -43,6 +47,10 @@ class FloodWatchApp {
             this.showFloodControls();
         });
 
+        document.getElementById('fail-node-btn').addEventListener('click', () => {
+            this.failRandomNode();
+        });
+
         document.getElementById('confirm-flood-btn').addEventListener('click', () => {
             this.triggerFlood();
         });
@@ -54,10 +62,15 @@ class FloodWatchApp {
         // Node and gateway failure buttons removed
 
         // Configuration changes
-        ['grid-width', 'grid-height', 'sensor-count', 'comm-range', 'speed'].forEach(id => {
+        ['grid-width', 'grid-height', 'sensor-count', 'comm-range', 'max-neighbors', 'speed'].forEach(id => {
             document.getElementById(id).addEventListener('change', (e) => {
                 this.updateConfiguration(id, e.target.value);
             });
+        });
+
+        // Random flood toggle
+        document.getElementById('enable-random-floods').addEventListener('change', (e) => {
+            this.currentConfig.enableRandomFloods = e.target.checked;
         });
 
         // Log controls
@@ -108,11 +121,20 @@ class FloodWatchApp {
         // Node and gateway events removed
 
         this.socket.on('incident-report', (data) => {
+            this.lastIncidentReport = data;
             this.updateIncidents(data);
         });
 
         this.socket.on('central-server-message', (data) => {
             this.handleServerMessage(data);
+        });
+
+        this.socket.on('node-failure', (data) => {
+            this.handleNodeFailure(data);
+        });
+
+        this.socket.on('node-failure-report', (data) => {
+            this.handleNodeFailureReport(data);
         });
     }
 
@@ -122,6 +144,8 @@ class FloodWatchApp {
             gridHeight: parseInt(document.getElementById('grid-height').value) || 50,
             sensorCount: parseInt(document.getElementById('sensor-count').value),
             communicationRange: parseFloat(document.getElementById('comm-range').value) || 5,
+            maxNeighbors: parseInt(document.getElementById('max-neighbors').value) || 5,
+            enableRandomFloods: document.getElementById('enable-random-floods').checked,
             simulationSpeed: parseInt(document.getElementById('speed').value)
         };
 
@@ -170,12 +194,29 @@ class FloodWatchApp {
         }
     }
 
+    failRandomNode() {
+        this.socket.emit('fail-random-node');
+        this.logMessage('Requested random node failure', 'error');
+    }
+
+    handleNodeFailure(data) {
+        this.logMessage(`Node ${data.nodeId} failed at location (${data.location.x}, ${data.location.y})`, 'error');
+    }
+
+    handleNodeFailureReport(data) {
+        this.currentNodeFailures = data.failures;
+        this.updateIncidentsWithFailures();
+    }
+
 
     updateConfiguration(parameter, value) {
         let processedValue;
         if (parameter === 'comm-range') {
             processedValue = parseFloat(value);
             this.currentConfig.communicationRange = processedValue;
+        } else if (parameter === 'max-neighbors') {
+            processedValue = parseInt(value);
+            this.currentConfig.maxNeighbors = processedValue;
         } else {
             processedValue = parseInt(value);
             this.currentConfig[parameter.replace('-', '')] = processedValue;
@@ -230,25 +271,59 @@ class FloodWatchApp {
         if (!incidentReport || !incidentReport.incidents) return;
 
         const incidentsDiv = document.getElementById('incidents-list');
+        let incidentsHtml = '';
 
-        if (incidentReport.incidents.length === 0) {
-            incidentsDiv.innerHTML = '<p class="no-data">No active incidents</p>';
-            return;
+        // Add flood incidents
+        if (incidentReport.incidents.length > 0) {
+            incidentsHtml += incidentReport.incidents.map(incident => `
+                <div class="incident-item fade-in flood-incident">
+                    <div class="incident-header">
+                        <span><strong>🌊 Flood ${incident.id.split('-')[1]}</strong></span>
+                        <span class="incident-severity severity-${incident.severity.toLowerCase()}">
+                            ${incident.severity}
+                        </span>
+                    </div>
+                    <div>Location: (${Math.round(incident.location.x)}, ${Math.round(incident.location.y)})</div>
+                    <div>Sensors: ${incident.sensorCount} | Max Water: ${incident.maxWaterLevel.toFixed(1)}m</div>
+                    <div>Duration: ${Math.round(incident.duration / 1000)}s</div>
+                </div>
+            `).join('');
         }
 
-        incidentsDiv.innerHTML = incidentReport.incidents.map(incident => `
-            <div class="incident-item fade-in">
-                <div class="incident-header">
-                    <span><strong>Incident ${incident.id.split('-')[1]}</strong></span>
-                    <span class="incident-severity severity-${incident.severity.toLowerCase()}">
-                        ${incident.severity}
-                    </span>
+        // Add node failure incidents
+        if (this.currentNodeFailures && this.currentNodeFailures.length > 0) {
+            incidentsHtml += this.currentNodeFailures.map(failure => `
+                <div class="incident-item fade-in failure-incident">
+                    <div class="incident-header">
+                        <span><strong>💥 Node Failure</strong></span>
+                        <span class="incident-severity severity-critical">CRITICAL</span>
+                    </div>
+                    <div><strong>Node:</strong> ${failure.nodeId}</div>
+                    <div><strong>Location:</strong> (${Math.round(failure.location.x)}, ${Math.round(failure.location.y)})</div>
+                    <div><strong>Detection Method:</strong> ${failure.confirmationMethod}</div>
+                    <div><strong>Evidence Sources:</strong></div>
+                    <ul class="evidence-list">
+                        ${failure.evidenceSources.map(evidence => `<li>${evidence}</li>`).join('')}
+                    </ul>
+                    <div><strong>Duration:</strong> ${Math.round((Date.now() - failure.detectedAt) / 1000)}s</div>
                 </div>
-                <div>Location: (${Math.round(incident.location.x)}, ${Math.round(incident.location.y)})</div>
-                <div>Sensors: ${incident.sensorCount} | Max Water: ${incident.maxWaterLevel.toFixed(1)}m</div>
-                <div>Duration: ${Math.round(incident.duration / 1000)}s</div>
-            </div>
-        `).join('');
+            `).join('');
+        }
+
+        if (incidentsHtml === '') {
+            incidentsDiv.innerHTML = '<p class="no-data">No active incidents</p>';
+        } else {
+            incidentsDiv.innerHTML = incidentsHtml;
+        }
+    }
+
+    updateIncidentsWithFailures() {
+        // Call updateIncidents with current data to refresh the display
+        if (this.lastIncidentReport) {
+            this.updateIncidents(this.lastIncidentReport);
+        } else {
+            this.updateIncidents({ incidents: [] });
+        }
     }
 
     handleFloodEvent(data) {
@@ -262,7 +337,7 @@ class FloodWatchApp {
     updateUI() {
         const startBtn = document.getElementById('start-btn');
         const stopBtn = document.getElementById('stop-btn');
-        const configInputs = ['grid-width', 'grid-height', 'sensor-count', 'comm-range', 'speed'];
+        const configInputs = ['grid-width', 'grid-height', 'sensor-count', 'comm-range', 'max-neighbors', 'speed'];
 
         if (this.isRunning) {
             startBtn.disabled = true;

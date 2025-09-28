@@ -42,6 +42,12 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('fail-random-node', () => {
+    if (simulation) {
+      simulation.failRandomNode();
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('Client disconnected');
   });
