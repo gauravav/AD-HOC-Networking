@@ -38,15 +38,11 @@ io.on('connection', (socket) => {
 
   socket.on('trigger-flood', (data) => {
     if (simulation) {
-      simulation.triggerFlood(data.x, data.y, data.waterLevel);
+      simulation.triggerGradualFlood(data.x, data.y, data.maxWaterLevel, data.duration);
     }
   });
 
-  socket.on('fail-random-node', () => {
-    if (simulation) {
-      simulation.failRandomNode();
-    }
-  });
+  // Node failure functionality disabled
 
   socket.on('disconnect', () => {
     console.log('Client disconnected');

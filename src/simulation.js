@@ -5,10 +5,10 @@ const { MessageTypes } = require('./messages');
 class FloodWatchSimulation {
   constructor(config = {}, io = null) {
     this.config = {
-      gridWidth: config.gridWidth || 100, // 100 meters
-      gridHeight: config.gridHeight || 50, // 50 meters
-      sensorCount: config.sensorCount || 100,
-      communicationRange: config.communicationRange || 5, // meters
+      gridWidth: config.gridWidth || 25, // 25 meters
+      gridHeight: config.gridHeight || 25, // 25 meters
+      sensorCount: config.sensorCount || 20,
+      communicationRange: config.communicationRange || 10, // meters
       maxNeighbors: config.maxNeighbors || 5, // max neighbors per node
       enableRandomFloods: config.enableRandomFloods !== undefined ? config.enableRandomFloods : true, // enable random floods
       simulationSpeed: config.simulationSpeed || 1000, // ms per tick
@@ -40,6 +40,9 @@ class FloodWatchSimulation {
       incidentsCreated: 0,
       nodeFailures: 0
     };
+
+    // Active floods tracking
+    this.activeFloods = new Map();
 
     this.simulationLog = [];
     this.initializeNetwork();
@@ -162,14 +165,13 @@ class FloodWatchSimulation {
     // Process coordination (incident management)
     this.processIncidentCoordination();
 
+    // Process active floods
+    this.processActiveFloods();
+
     // Update metrics
     this.updateMetrics();
 
-    // Random flood events (only if enabled)
-    if (this.config.enableRandomFloods && Math.random() < 0.02) { // 2% chance per tick
-      this.log('🌊 Auto flood event triggered randomly', { type: 'AUTO_FLOOD' });
-      this.triggerRandomFlood();
-    }
+    // Random flood events removed - only manual floods allowed
 
     // Emit status update
     if (this.currentTick % 10 === 0) { // Every 10 ticks
@@ -270,10 +272,7 @@ class FloodWatchSimulation {
       timestamp: Date.now()
     });
 
-    // Track node activity for failure detection
-    if (message.type === MessageTypes.HELLO) {
-      this.coordinationAgent.recordNodeActivity(sender.id);
-    }
+    // Node activity tracking disabled
 
     // Enhanced logging for HELLO messages with neighbor data
     if (message.type === MessageTypes.HELLO && message.data.neighbors) {
@@ -301,40 +300,12 @@ class FloodWatchSimulation {
 
 
   processIncidentCoordination() {
-    // Run failure detection
-    const detectedFailures = this.coordinationAgent.detectNodeFailures(this.sensors);
-
-    // Log newly detected failures
-    if (detectedFailures.length > 0) {
-      const newFailures = detectedFailures.filter(failure =>
-        Date.now() - failure.detectedAt < 10000 // Within last 10 seconds
-      );
-
-      newFailures.forEach(failure => {
-        this.log(`🔍 Node failure detected: ${failure.nodeId} | Method: ${failure.confirmationMethod} | Evidence: ${failure.evidenceSources.length} sources`, {
-          nodeId: failure.nodeId,
-          confirmationMethod: failure.confirmationMethod,
-          evidenceSources: failure.evidenceSources,
-          type: 'FAILURE_DETECTION'
-        });
-      });
-    }
-
-    this.coordinationAgent.clearOldFailures();
+    // Node failure detection disabled - focus on flood alerts only
 
     // Let coordination agent generate reports
     const report = this.coordinationAgent.generateIncidentReports();
     if (report) {
       this.emit('incident-report', report);
-    }
-
-    // Send node failure reports
-    const nodeFailures = this.coordinationAgent.getNodeFailures();
-    if (nodeFailures.length > 0) {
-      this.emit('node-failure-report', {
-        timestamp: Date.now(),
-        failures: nodeFailures
-      });
     }
   }
 
@@ -384,12 +355,126 @@ class FloodWatchSimulation {
 
 
 
-  triggerRandomFlood() {
-    const x = Math.floor(Math.random() * this.config.gridWidth);
-    const y = Math.floor(Math.random() * this.config.gridHeight);
-    const waterLevel = 1.5 + Math.random() * 2; // 1.5 to 3.5 meters
+  triggerGradualFlood(x, y, maxWaterLevel, durationSeconds) {
+    const floodId = `FLOOD-${Date.now()}`;
+    const flood = {
+      id: floodId,
+      epicenter: { x, y },
+      maxWaterLevel: maxWaterLevel,
+      currentWaterLevel: 0,
+      duration: durationSeconds * 1000, // Convert to milliseconds
+      startTime: Date.now(),
+      ticksPerSecond: 1000 / this.config.simulationSpeed,
+      radius: 5 // 5-unit radius
+    };
 
-    this.triggerFlood(x, y, waterLevel);
+    this.activeFloods.set(floodId, flood);
+
+    this.log(`🌊 GRADUAL FLOOD STARTED at (${x}, ${y}) - will reach ${maxWaterLevel.toFixed(1)}m over ${durationSeconds}s`, {
+      epicenter: { x, y },
+      maxWaterLevel,
+      duration: durationSeconds,
+      type: 'GRADUAL_FLOOD_START'
+    });
+
+    this.emit('flood-event', {
+      epicenter: { x, y },
+      waterLevel: 0,
+      maxWaterLevel: maxWaterLevel,
+      duration: durationSeconds,
+      type: 'gradual',
+      affectedNodes: []
+    });
+  }
+
+  processActiveFloods() {
+    const now = Date.now();
+    const affectedNodes = [];
+
+    for (const [floodId, flood] of this.activeFloods.entries()) {
+      const elapsedTime = now - flood.startTime;
+      const buildupTime = flood.duration * 0.3; // 30% of time to reach max level
+      const sustainTime = flood.duration * 0.7; // 70% of time at max level
+
+      let progress, currentWaterLevel;
+
+      if (elapsedTime <= buildupTime) {
+        // Rising phase - water level increases to maximum
+        progress = elapsedTime / buildupTime;
+        currentWaterLevel = flood.maxWaterLevel * progress;
+      } else if (elapsedTime <= flood.duration) {
+        // Sustain phase - water level stays at maximum
+        progress = 1.0;
+        currentWaterLevel = flood.maxWaterLevel;
+      } else {
+        // Flood duration exceeded - start cleanup
+        progress = 1.0;
+        currentWaterLevel = flood.maxWaterLevel * Math.max(0, 1 - ((elapsedTime - flood.duration) / (flood.duration * 0.2)));
+      }
+
+      flood.currentWaterLevel = currentWaterLevel;
+
+      // Apply flood to affected nodes
+      const floodAffectedNodes = [];
+      for (const node of this.sensors) {
+        const distance = Math.sqrt(
+          Math.pow(node.location.x - flood.epicenter.x, 2) +
+          Math.pow(node.location.y - flood.epicenter.y, 2)
+        );
+
+        if (distance <= flood.radius) {
+          // Give full water level at epicenter, reducing to 50% at edge of radius
+          const distanceRatio = distance / flood.radius;
+          const adjustedWaterLevel = flood.currentWaterLevel * (1 - (distanceRatio * 0.5));
+          if (adjustedWaterLevel > 0) {
+            node.updateWaterLevel(adjustedWaterLevel);
+            floodAffectedNodes.push({
+              nodeId: node.id,
+              waterLevel: adjustedWaterLevel,
+              location: node.location
+            });
+          }
+        }
+      }
+
+      // Update flood visualization
+      if (this.currentTick % 5 === 0) { // Update every 5 ticks to reduce spam
+        this.emit('flood-update', {
+          floodId: floodId,
+          epicenter: flood.epicenter,
+          currentWaterLevel: flood.currentWaterLevel,
+          maxWaterLevel: flood.maxWaterLevel,
+          progress: progress,
+          affectedNodes: floodAffectedNodes
+        });
+      }
+
+      affectedNodes.push(...floodAffectedNodes);
+
+      // Remove floods that have completely receded
+      if (elapsedTime > flood.duration * 1.2 && currentWaterLevel <= 0) {
+        this.log(`🌊 GRADUAL FLOOD RECEDED at (${flood.epicenter.x}, ${flood.epicenter.y}) - lasted ${Math.round(elapsedTime / 1000)}s`, {
+          epicenter: flood.epicenter,
+          finalWaterLevel: 0,
+          type: 'GRADUAL_FLOOD_RECEDED'
+        });
+
+        // Set all affected nodes back to 0 water level
+        for (const node of this.sensors) {
+          const distance = Math.sqrt(
+            Math.pow(node.location.x - flood.epicenter.x, 2) +
+            Math.pow(node.location.y - flood.epicenter.y, 2)
+          );
+          if (distance <= flood.radius) {
+            node.updateWaterLevel(0);
+          }
+        }
+
+        this.activeFloods.delete(floodId);
+      }
+    }
+
+    return affectedNodes;
   }
 
   triggerFlood(x, y, waterLevel) {
@@ -402,7 +487,9 @@ class FloodWatchSimulation {
       );
 
       if (distance <= 5) { // 5-unit radius
-        const adjustedWaterLevel = waterLevel * (1 - distance / 10);
+        // Give full water level at epicenter, reducing to 50% at edge of radius
+        const distanceRatio = distance / 5;
+        const adjustedWaterLevel = waterLevel * (1 - (distanceRatio * 0.5));
         if (adjustedWaterLevel > 0) {
           node.updateWaterLevel(adjustedWaterLevel);
           affectedNodes.push({

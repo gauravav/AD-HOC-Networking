@@ -10,6 +10,7 @@ class SensorAgent {
     this.waterLevel = 0;
     this.waterThreshold = 1.5; // meters
     this.isActive = true;
+    this.isFlooding = false; // Track if flooding is detected
 
     // Message handling
     this.messageBuffer = [];
@@ -20,6 +21,7 @@ class SensorAgent {
 
     // Timers
     this.helloInterval = null;
+    this.waterReportInterval = null;
     this.lastHeartbeat = Date.now();
 
     this.startPeriodicTasks();
@@ -39,12 +41,30 @@ class SensorAgent {
     if (this.helloInterval) {
       clearInterval(this.helloInterval);
     }
+    if (this.waterReportInterval) {
+      clearInterval(this.waterReportInterval);
+    }
   }
 
   updateWaterLevel(level) {
     this.waterLevel = level;
+
     if (level > this.waterThreshold && this.isActive) {
-      this.detectFlood();
+      if (!this.isFlooding) {
+        // First detection of flooding
+        this.isFlooding = true;
+        this.detectFlood();
+        this.startWaterLevelReporting();
+      } else {
+        // Continuous reporting during flooding
+        this.reportWaterLevel();
+      }
+    } else if (this.isFlooding && level <= this.waterThreshold) {
+      // Flooding has receded
+      this.isFlooding = false;
+      this.stopWaterLevelReporting();
+      // Send final clear alert with current low water level
+      this.reportWaterLevel();
     }
   }
 
@@ -62,6 +82,38 @@ class SensorAgent {
     // Also broadcast to neighbors
     this.broadcastMessage(alert);
     return alert;
+  }
+
+  startWaterLevelReporting() {
+    // Start reporting water levels every 10 seconds during flooding
+    this.waterReportInterval = setInterval(() => {
+      if (this.isActive && this.isFlooding) {
+        this.reportWaterLevel();
+      }
+    }, 10000); // 10 seconds
+  }
+
+  stopWaterLevelReporting() {
+    if (this.waterReportInterval) {
+      clearInterval(this.waterReportInterval);
+      this.waterReportInterval = null;
+    }
+  }
+
+  reportWaterLevel() {
+    if (!this.isActive) return;
+
+    const alert = new AlertMessage(
+      this.id,
+      this.location,
+      this.waterLevel,
+      this.waterLevel > 3.0 ? 'CRITICAL' :
+      this.waterLevel > 2.0 ? 'HIGH' :
+      this.waterLevel > 1.5 ? 'MEDIUM' : 'LOW'
+    );
+
+    // Send current water level to central server
+    this.deliverToCentralServer(alert);
   }
 
   broadcastHello() {

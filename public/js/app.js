@@ -3,12 +3,11 @@ class FloodWatchApp {
         this.socket = io();
         this.isRunning = false;
         this.currentConfig = {
-            gridWidth: 100,
-            gridHeight: 50,
-            sensorCount: 100,
-            communicationRange: 5,
+            gridWidth: 25,
+            gridHeight: 25,
+            sensorCount: 20,
+            communicationRange: 10,
             maxNeighbors: 5,
-            enableRandomFloods: true,
             simulationSpeed: 1000
         };
 
@@ -18,7 +17,7 @@ class FloodWatchApp {
             lastMessage: null
         };
 
-        this.currentNodeFailures = [];
+        // Node failure tracking disabled
 
         this.gridVis = new GridVisualization('grid-canvas');
         this.metricsChart = new MetricsChart('metrics-chart');
@@ -47,9 +46,7 @@ class FloodWatchApp {
             this.showFloodControls();
         });
 
-        document.getElementById('fail-node-btn').addEventListener('click', () => {
-            this.failRandomNode();
-        });
+        // Node failure functionality disabled
 
         document.getElementById('confirm-flood-btn').addEventListener('click', () => {
             this.triggerFlood();
@@ -68,10 +65,7 @@ class FloodWatchApp {
             });
         });
 
-        // Random flood toggle
-        document.getElementById('enable-random-floods').addEventListener('change', (e) => {
-            this.currentConfig.enableRandomFloods = e.target.checked;
-        });
+        // Random flood toggle removed
 
         // Log controls
         document.getElementById('clear-log').addEventListener('click', () => {
@@ -118,6 +112,10 @@ class FloodWatchApp {
             this.handleFloodEvent(data);
         });
 
+        this.socket.on('flood-update', (data) => {
+            this.handleFloodUpdate(data);
+        });
+
         // Node and gateway events removed
 
         this.socket.on('incident-report', (data) => {
@@ -129,23 +127,16 @@ class FloodWatchApp {
             this.handleServerMessage(data);
         });
 
-        this.socket.on('node-failure', (data) => {
-            this.handleNodeFailure(data);
-        });
-
-        this.socket.on('node-failure-report', (data) => {
-            this.handleNodeFailureReport(data);
-        });
+        // Node failure event handlers disabled
     }
 
     startSimulation() {
         const config = {
-            gridWidth: parseInt(document.getElementById('grid-width').value) || 100,
-            gridHeight: parseInt(document.getElementById('grid-height').value) || 50,
-            sensorCount: parseInt(document.getElementById('sensor-count').value),
-            communicationRange: parseFloat(document.getElementById('comm-range').value) || 5,
+            gridWidth: parseInt(document.getElementById('grid-width').value) || 25,
+            gridHeight: parseInt(document.getElementById('grid-height').value) || 25,
+            sensorCount: parseInt(document.getElementById('sensor-count').value) || 20,
+            communicationRange: parseFloat(document.getElementById('comm-range').value) || 10,
             maxNeighbors: parseInt(document.getElementById('max-neighbors').value) || 5,
-            enableRandomFloods: document.getElementById('enable-random-floods').checked,
             simulationSpeed: parseInt(document.getElementById('speed').value)
         };
 
@@ -180,33 +171,22 @@ class FloodWatchApp {
     triggerFlood() {
         const x = parseInt(document.getElementById('flood-x').value);
         const y = parseInt(document.getElementById('flood-y').value);
-        const waterLevel = parseFloat(document.getElementById('flood-level').value);
+        const maxWaterLevel = parseFloat(document.getElementById('flood-level').value);
+        const duration = parseInt(document.getElementById('flood-duration').value);
 
         if (x >= 0 && x < this.currentConfig.gridWidth &&
             y >= 0 && y < this.currentConfig.gridHeight &&
-            waterLevel > 0) {
+            maxWaterLevel > 0 && duration > 0) {
 
-            this.socket.emit('trigger-flood', { x, y, waterLevel });
+            this.socket.emit('trigger-flood', { x, y, maxWaterLevel, duration });
             this.hideFloodControls();
-            this.logMessage(`Manually triggered flood at (${x}, ${y}) with water level ${waterLevel}m`, 'warning');
+            this.logMessage(`Manually triggered gradual flood at (${x}, ${y}) - will reach ${maxWaterLevel}m over ${duration}s`, 'warning');
         } else {
             alert('Invalid flood parameters');
         }
     }
 
-    failRandomNode() {
-        this.socket.emit('fail-random-node');
-        this.logMessage('Requested random node failure', 'error');
-    }
-
-    handleNodeFailure(data) {
-        this.logMessage(`Node ${data.nodeId} failed at location (${data.location.x}, ${data.location.y})`, 'error');
-    }
-
-    handleNodeFailureReport(data) {
-        this.currentNodeFailures = data.failures;
-        this.updateIncidentsWithFailures();
-    }
+    // Node failure methods disabled
 
 
     updateConfiguration(parameter, value) {
@@ -255,7 +235,7 @@ class FloodWatchApp {
         document.getElementById('network-overhead').textContent =
             Math.round(metrics.networkOverhead || 0) + '%';
         document.getElementById('grid-dimensions').textContent =
-            `${this.currentConfig.gridWidth || 100}m x ${this.currentConfig.gridHeight || 50}m`;
+            `${this.currentConfig.gridWidth || 25}m x ${this.currentConfig.gridHeight || 25}m`;
 
         // Update chart
         this.metricsChart.addDataPoint({
@@ -271,66 +251,73 @@ class FloodWatchApp {
         if (!incidentReport || !incidentReport.incidents) return;
 
         const incidentsDiv = document.getElementById('incidents-list');
-        let incidentsHtml = '';
 
-        // Add flood incidents
-        if (incidentReport.incidents.length > 0) {
-            incidentsHtml += incidentReport.incidents.map(incident => `
-                <div class="incident-item fade-in flood-incident">
-                    <div class="incident-header">
-                        <span><strong>🌊 Flood ${incident.id.split('-')[1]}</strong></span>
-                        <span class="incident-severity severity-${incident.severity.toLowerCase()}">
-                            ${incident.severity}
-                        </span>
+        // Show only flood incidents
+        if (incidentReport.incidents.length === 0) {
+            incidentsDiv.innerHTML = '<p class="no-data">No active flood incidents</p>';
+            return;
+        }
+
+        incidentsDiv.innerHTML = incidentReport.incidents.map(incident => {
+            const lastUpdate = new Date(Date.now() - (Date.now() - incident.duration)).toLocaleTimeString();
+            const sensorList = incident.sensorDetails ? incident.sensorDetails
+                .sort((a, b) => b.waterLevel - a.waterLevel)
+                .map(sensor => `
+                    <div class="sensor-detail">
+                        <span class="sensor-id">${sensor.sensorId}</span>
+                        <span class="sensor-location">(${Math.round(sensor.location.x)}, ${Math.round(sensor.location.y)})</span>
+                        <span class="sensor-water-level">${sensor.waterLevel.toFixed(1)}m</span>
                     </div>
-                    <div>Location: (${Math.round(incident.location.x)}, ${Math.round(incident.location.y)})</div>
-                    <div>Sensors: ${incident.sensorCount} | Max Water: ${incident.maxWaterLevel.toFixed(1)}m</div>
-                    <div>Duration: ${Math.round(incident.duration / 1000)}s</div>
-                </div>
-            `).join('');
-        }
+                `).join('') : '';
 
-        // Add node failure incidents
-        if (this.currentNodeFailures && this.currentNodeFailures.length > 0) {
-            incidentsHtml += this.currentNodeFailures.map(failure => `
-                <div class="incident-item fade-in failure-incident">
-                    <div class="incident-header">
-                        <span><strong>💥 Node Failure</strong></span>
-                        <span class="incident-severity severity-critical">CRITICAL</span>
+            return `
+            <div class="incident-item fade-in flood-incident" data-incident-id="${incident.id}">
+                <div class="incident-header">
+                    <span><strong>🌊 Consolidated Flood Alert</strong></span>
+                    <span class="incident-severity severity-${incident.severity.toLowerCase()}">
+                        ${incident.severity}
+                    </span>
+                </div>
+                <div><strong>Epicenter:</strong> (${Math.round(incident.location.x)}, ${Math.round(incident.location.y)})</div>
+                <div><strong>Affected Sensors:</strong> ${incident.sensorCount} nodes</div>
+                <div><strong>Current Max Water Level:</strong> <span class="water-level-live">${incident.maxWaterLevel.toFixed(1)}m</span></div>
+                <div><strong>Duration:</strong> ${Math.round(incident.duration / 1000)}s</div>
+                <div><strong>Last Update:</strong> <span class="last-update">${lastUpdate}</span></div>
+                <div class="sensor-readings">
+                    <strong>Sensor Readings:</strong>
+                    <div class="sensor-list">
+                        ${sensorList}
                     </div>
-                    <div><strong>Node:</strong> ${failure.nodeId}</div>
-                    <div><strong>Location:</strong> (${Math.round(failure.location.x)}, ${Math.round(failure.location.y)})</div>
-                    <div><strong>Detection Method:</strong> ${failure.confirmationMethod}</div>
-                    <div><strong>Evidence Sources:</strong></div>
-                    <ul class="evidence-list">
-                        ${failure.evidenceSources.map(evidence => `<li>${evidence}</li>`).join('')}
-                    </ul>
-                    <div><strong>Duration:</strong> ${Math.round((Date.now() - failure.detectedAt) / 1000)}s</div>
                 </div>
-            `).join('');
-        }
-
-        if (incidentsHtml === '') {
-            incidentsDiv.innerHTML = '<p class="no-data">No active incidents</p>';
-        } else {
-            incidentsDiv.innerHTML = incidentsHtml;
-        }
-    }
-
-    updateIncidentsWithFailures() {
-        // Call updateIncidents with current data to refresh the display
-        if (this.lastIncidentReport) {
-            this.updateIncidents(this.lastIncidentReport);
-        } else {
-            this.updateIncidents({ incidents: [] });
-        }
+                <div class="incident-details">
+                    <small>Real-time water levels from ${incident.sensorCount} sensor${incident.sensorCount > 1 ? 's' : ''}</small>
+                </div>
+            </div>
+        `;
+        }).join('');
     }
 
     handleFloodEvent(data) {
-        this.logMessage(`Flood detected at (${data.epicenter.x}, ${data.epicenter.y}) - ${data.affectedNodes.length} nodes affected`, 'warning');
+        if (data.type === 'gradual') {
+            this.logMessage(`Gradual flood started at (${data.epicenter.x}, ${data.epicenter.y}) - will reach ${data.maxWaterLevel}m over ${data.duration}s`, 'warning');
+        } else {
+            this.logMessage(`Flood detected at (${data.epicenter.x}, ${data.epicenter.y}) - ${data.affectedNodes.length} nodes affected`, 'warning');
+        }
 
-        // Add flood visualization
+        // Add initial flood visualization
         this.gridVis.addFloodArea(data.epicenter.x, data.epicenter.y, 5, data.waterLevel / 5);
+    }
+
+    handleFloodUpdate(data) {
+        // Update flood visualization with current progress
+        const intensity = data.currentWaterLevel / data.maxWaterLevel;
+        this.gridVis.updateFloodArea(data.epicenter.x, data.epicenter.y, 5, intensity);
+
+        // Log progress updates occasionally
+        const progress = Math.round(data.progress * 100);
+        if (progress % 25 === 0 && progress > 0) { // Log at 25%, 50%, 75%, 100%
+            this.logMessage(`Flood at (${data.epicenter.x}, ${data.epicenter.y}) - ${progress}% complete (${data.currentWaterLevel.toFixed(1)}m)`, 'info');
+        }
     }
 
 
