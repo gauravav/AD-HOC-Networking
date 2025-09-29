@@ -13,6 +13,9 @@ class GatewayAgent {
     // Connected sensors
     this.connectedSensors = new Set();
     this.sensorData = new Map(); // Store latest data from each sensor
+    
+    // Connected gateways for inter-gateway communication
+    this.connectedGateways = new Set();
 
     // Message handling
     this.messageBuffer = [];
@@ -204,6 +207,33 @@ class GatewayAgent {
   // Check if a sensor is within communication range
   canCommunicateWith(sensor) {
     return this.calculateDistance(sensor.location) <= this.communicationRange;
+  }
+
+  // Send message to other gateways (inter-gateway communication)
+  broadcastToGateways(message, excludeGatewayIds = []) {
+    if (!this.isActive) return;
+    
+    // Forward message to all connected gateways except excluded ones
+    this.connectedGateways.forEach(gatewayId => {
+      if (!excludeGatewayIds.includes(gatewayId)) {
+        // In a real implementation, this would send over network
+        // For simulation, we'll add to a broadcast queue
+        console.log(`Gateway ${this.id} broadcasting to Gateway ${gatewayId}`);
+      }
+    });
+  }
+
+  // Receive message from another gateway
+  receiveFromGateway(message, senderGatewayId) {
+    if (!this.isActive) return;
+    
+    // Prevent loops - don't process if we've seen this message
+    if (this.receivedMessages.has(message.id)) return;
+    
+    console.log(`Gateway ${this.id} received message from Gateway ${senderGatewayId}`);
+    
+    // Process the message (forward to central server if needed)
+    this.receiveMessage(message, { id: senderGatewayId, isGateway: true });
   }
 }
 

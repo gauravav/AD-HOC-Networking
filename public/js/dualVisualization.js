@@ -167,6 +167,45 @@ class DualGridVisualization {
             ctx.lineTo(this.canvasWidth - this.padding, y);
             ctx.stroke();
         }
+        
+        // Draw 4-section dividers for federation view
+        if (ctx === this.federationCtx) {
+            this.drawSectionDividers(ctx, drawableWidth, drawableHeight);
+        }
+    }
+
+    drawSectionDividers(ctx, drawableWidth, drawableHeight) {
+        // Draw thick lines to divide grid into 4 sections
+        ctx.strokeStyle = '#3498db';
+        ctx.lineWidth = 3;
+        
+        // Vertical divider (middle)
+        const midX = this.padding + drawableWidth / 2;
+        ctx.beginPath();
+        ctx.moveTo(midX, this.padding);
+        ctx.lineTo(midX, this.canvasHeight - this.padding);
+        ctx.stroke();
+        
+        // Horizontal divider (middle)
+        const midY = this.padding + drawableHeight / 2;
+        ctx.beginPath();
+        ctx.moveTo(this.padding, midY);
+        ctx.lineTo(this.canvasWidth - this.padding, midY);
+        ctx.stroke();
+        
+        // Section labels
+        ctx.fillStyle = '#34495e';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        
+        // Section 1 (Top-left)
+        ctx.fillText('Section 1', this.padding + drawableWidth / 4, this.padding + 15);
+        // Section 2 (Top-right)
+        ctx.fillText('Section 2', this.padding + 3 * drawableWidth / 4, this.padding + 15);
+        // Section 3 (Bottom-left)
+        ctx.fillText('Section 3', this.padding + drawableWidth / 4, this.canvasHeight - this.padding - 5);
+        // Section 4 (Bottom-right)
+        ctx.fillText('Section 4', this.padding + 3 * drawableWidth / 4, this.canvasHeight - this.padding - 5);
     }
 
     drawFloodAreas(ctx) {
@@ -404,8 +443,8 @@ class DualGridVisualization {
         const drawableWidth = this.canvasWidth - (2 * this.padding);
         const drawableHeight = this.canvasHeight - (2 * this.padding);
 
-        // Draw gateway cluster connections (5m range clustering)
-        this.drawGatewayClusterConnections(ctx, drawableWidth, drawableHeight);
+        // Draw gateway-to-gateway connections (all gateways connected to each other)
+        this.drawGatewayToGatewayConnections(ctx, drawableWidth, drawableHeight);
 
         // Draw lines from sensors to assigned gateways
         ctx.strokeStyle = 'rgba(52, 152, 219, 0.6)';
@@ -459,6 +498,36 @@ class DualGridVisualization {
         ctx.font = '8px Arial';
         ctx.textAlign = 'center';
         ctx.fillText('CS', serverX, serverY + 18);
+    }
+
+    drawGatewayToGatewayConnections(ctx, drawableWidth, drawableHeight) {
+        if (!this.federationData.gateways || this.federationData.gateways.length < 2) return;
+
+        // Draw connections between all gateways (full mesh)
+        ctx.strokeStyle = 'rgba(155, 89, 182, 0.7)'; // Purple for gateway-to-gateway
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 4]);
+
+        const gateways = this.federationData.gateways.filter(gw => gw.isActive);
+        
+        for (let i = 0; i < gateways.length; i++) {
+            for (let j = i + 1; j < gateways.length; j++) {
+                const gw1 = gateways[i];
+                const gw2 = gateways[j];
+                
+                const x1 = this.padding + (gw1.location.x / this.gridWidth) * drawableWidth;
+                const y1 = this.padding + (gw1.location.y / this.gridHeight) * drawableHeight;
+                const x2 = this.padding + (gw2.location.x / this.gridWidth) * drawableWidth;
+                const y2 = this.padding + (gw2.location.y / this.gridHeight) * drawableHeight;
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+        }
+
+        ctx.setLineDash([]);
     }
 
     drawGatewayClusterConnections(ctx, drawableWidth, drawableHeight) {

@@ -24,32 +24,79 @@ class FederationSimulation extends FloodWatchSimulation {
   }
 
   setupFederationArchitecture() {
-    // Create gateway nodes strategically placed
-    const gatewayCount = Math.ceil(this.config.sensorCount / 8); // 1 gateway per ~8 sensors
-    const gatewayPositions = this.calculateGatewayPositions(gatewayCount);
+    // Create 4 gateway nodes in 4 grid sections
+    const gatewayPositions = this.createFourSectionGateways();
 
-    // Create gateways - only create as many as we have valid positions
+    // Create gateways - exactly 4 gateways, one per section
     for (let i = 0; i < gatewayPositions.length; i++) {
       const pos = gatewayPositions[i];
-      if (pos && pos.x !== undefined && pos.y !== undefined) {
-        const gateway = new GatewayAgent(
-          `GW${i + 1}`,
-          pos.x,
-          pos.y,
-          this.config.communicationRange * 1.5, // Gateways have larger range
-          5 // Max 5 sensors per gateway for clustering
-        );
+      const gateway = new GatewayAgent(
+        `GW${i + 1}`,
+        pos.x,
+        pos.y,
+        this.config.communicationRange * 2, // Larger range to cover section
+        10 // Max 10 sensors per gateway
+      );
 
-        // Add cluster information
-        gateway.clusterId = pos.clusterId || 1;
+      // Add section information
+      gateway.sectionId = pos.sectionId;
+      gateway.clusterId = pos.sectionId; // Use section as cluster for visualization
 
-        this.gateways.push(gateway);
-        console.log(`Created gateway ${gateway.id} in cluster ${gateway.clusterId} at (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)})`);
-      }
+      this.gateways.push(gateway);
+      console.log(`Created gateway ${gateway.id} in section ${gateway.sectionId} at (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)})`);
     }
 
-    // Assign sensors to nearest gateways
-    this.assignSensorsToGateways();
+    // Assign sensors to their section's gateway
+    this.assignSensorsToSectionGateways();
+    
+    // Setup gateway-to-gateway communication
+    this.setupGatewayToGatewayCommunication();
+  }
+
+  createFourSectionGateways() {
+    // Divide grid into 4 equal sections (quadrants)
+    const midX = this.config.gridWidth / 2;
+    const midY = this.config.gridHeight / 2;
+    
+    const sections = [
+      { // Top-left quadrant
+        minX: 0, maxX: midX,
+        minY: 0, maxY: midY,
+        sectionId: 1
+      },
+      { // Top-right quadrant
+        minX: midX, maxX: this.config.gridWidth,
+        minY: 0, maxY: midY,
+        sectionId: 2
+      },
+      { // Bottom-left quadrant
+        minX: 0, maxX: midX,
+        minY: midY, maxY: this.config.gridHeight,
+        sectionId: 3
+      },
+      { // Bottom-right quadrant
+        minX: midX, maxX: this.config.gridWidth,
+        minY: midY, maxY: this.config.gridHeight,
+        sectionId: 4
+      }
+    ];
+
+    const gatewayPositions = [];
+    
+    sections.forEach(section => {
+      // Place gateway randomly within section bounds (with some margin from edges)
+      const margin = 2;
+      const x = section.minX + margin + Math.random() * (section.maxX - section.minX - 2 * margin);
+      const y = section.minY + margin + Math.random() * (section.maxY - section.minY - 2 * margin);
+      
+      gatewayPositions.push({
+        x: x,
+        y: y,
+        sectionId: section.sectionId
+      });
+    });
+
+    return gatewayPositions;
   }
 
   calculateGatewayPositions(count) {
@@ -288,6 +335,66 @@ class FederationSimulation extends FloodWatchSimulation {
       x: totalX / sensors.length,
       y: totalY / sensors.length
     };
+  }
+
+  assignSensorsToSectionGateways() {
+    const midX = this.config.gridWidth / 2;
+    const midY = this.config.gridHeight / 2;
+    
+    let totalAssigned = 0;
+    let totalUnassigned = 0;
+    
+    for (const sensor of this.sensors) {
+      // Determine which section the sensor belongs to
+      let sectionId;
+      if (sensor.location.x < midX && sensor.location.y < midY) {
+        sectionId = 1; // Top-left
+      } else if (sensor.location.x >= midX && sensor.location.y < midY) {
+        sectionId = 2; // Top-right
+      } else if (sensor.location.x < midX && sensor.location.y >= midY) {
+        sectionId = 3; // Bottom-left
+      } else {
+        sectionId = 4; // Bottom-right
+      }
+      
+      // Find the gateway for this section
+      const sectionGateway = this.gateways.find(gw => gw.sectionId === sectionId);
+      
+      if (sectionGateway && sectionGateway.isActive) {
+        // Try to assign sensor to its section's gateway
+        if (sectionGateway.registerSensor(sensor)) {
+          sensor.assignedGateway = sectionGateway.id;
+          sensor.sectionId = sectionId;
+          console.log(`Sensor ${sensor.id} assigned to Gateway ${sectionGateway.id} in section ${sectionId}`);
+          totalAssigned++;
+        } else {
+          // Gateway is full (10 node limit reached)
+          console.log(`Warning: Gateway ${sectionGateway.id} in section ${sectionId} is full. Sensor ${sensor.id} unassigned.`);
+          totalUnassigned++;
+        }
+      } else {
+        console.log(`Error: No active gateway found for section ${sectionId}`);
+        totalUnassigned++;
+      }
+    }
+    
+    console.log(`Section-based assignment complete: ${totalAssigned} assigned, ${totalUnassigned} unassigned sensors`);
+  }
+
+  setupGatewayToGatewayCommunication() {
+    // Enable all gateways to communicate with each other
+    for (const gateway of this.gateways) {
+      gateway.connectedGateways = new Set();
+      
+      // Connect to all other gateways
+      for (const otherGateway of this.gateways) {
+        if (gateway.id !== otherGateway.id) {
+          gateway.connectedGateways.add(otherGateway.id);
+        }
+      }
+      
+      console.log(`Gateway ${gateway.id} connected to ${gateway.connectedGateways.size} other gateways`);
+    }
   }
 
   assignSensorsToGateways() {
