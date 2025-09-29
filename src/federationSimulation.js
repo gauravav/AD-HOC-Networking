@@ -37,9 +37,14 @@ class FederationSimulation extends FloodWatchSimulation {
           pos.x,
           pos.y,
           this.config.communicationRange * 1.5, // Gateways have larger range
-          10 // Max sensors per gateway
+          5 // Max 5 sensors per gateway for clustering
         );
+
+        // Add cluster information
+        gateway.clusterId = pos.clusterId || 1;
+
         this.gateways.push(gateway);
+        console.log(`Created gateway ${gateway.id} in cluster ${gateway.clusterId} at (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)})`);
       }
     }
 
@@ -53,51 +58,182 @@ class FederationSimulation extends FloodWatchSimulation {
   }
 
   calculateOptimalGatewayPositions() {
-    const positions = [];
     const gatewayRange = this.config.communicationRange * 1.5;
+    const clusterRange = 5; // Gateways within 5m range for clustering
+    const maxNodesPerCluster = 5; // Maximum 5 nodes per cluster
 
     // Check if sensors are available
     if (!this.sensors || this.sensors.length === 0) {
       console.log('No sensors available, using default gateway positions');
-      // Return default positions if no sensors
-      const defaultPositions = [
-        { x: this.config.gridWidth / 4, y: this.config.gridHeight / 4 },
-        { x: (3 * this.config.gridWidth) / 4, y: this.config.gridHeight / 4 },
-        { x: this.config.gridWidth / 4, y: (3 * this.config.gridHeight) / 4 },
-        { x: (3 * this.config.gridWidth) / 4, y: (3 * this.config.gridHeight) / 4 }
-      ];
-      return defaultPositions;
+      return this.createDefaultClusters();
     }
 
-    const uncoveredSensors = [...this.sensors];
+    // Create clusters of sensors first
+    const sensorClusters = this.createSensorClusters(maxNodesPerCluster);
 
-    // Place gateways iteratively to maximize coverage
-    while (uncoveredSensors.length > 0 && positions.length < 10) {
-      const bestPosition = this.findBestGatewayPosition(uncoveredSensors, positions, gatewayRange);
+    // Create gateway clusters for each sensor cluster
+    const gatewayPositions = this.createGatewayClusters(sensorClusters, clusterRange, gatewayRange);
 
-      if (!bestPosition) {
-        console.log('Could not find valid position, breaking');
-        break;
-      }
+    console.log(`Created ${gatewayPositions.length} gateways in clusters to cover ${this.sensors.length} sensors`);
+    return gatewayPositions;
+  }
 
-      positions.push(bestPosition);
+  createDefaultClusters() {
+    // Create 2 gateway clusters as default
+    return [
+      // Cluster 1
+      { x: this.config.gridWidth / 3, y: this.config.gridHeight / 3, clusterId: 1 },
+      { x: this.config.gridWidth / 3 + 3, y: this.config.gridHeight / 3 + 2, clusterId: 1 },
 
-      // Remove sensors that are now covered by this gateway
-      for (let i = uncoveredSensors.length - 1; i >= 0; i--) {
-        const sensor = uncoveredSensors[i];
-        const distance = Math.sqrt(
-          Math.pow(sensor.location.x - bestPosition.x, 2) +
-          Math.pow(sensor.location.y - bestPosition.y, 2)
-        );
+      // Cluster 2
+      { x: (2 * this.config.gridWidth) / 3, y: (2 * this.config.gridHeight) / 3, clusterId: 2 },
+      { x: (2 * this.config.gridWidth) / 3 + 3, y: (2 * this.config.gridHeight) / 3 + 2, clusterId: 2 }
+    ];
+  }
 
-        if (distance <= gatewayRange) {
-          uncoveredSensors.splice(i, 1);
+  createSensorClusters(maxNodesPerCluster) {
+    const clusters = [];
+    const unassignedSensors = [...this.sensors];
+    let clusterId = 1;
+
+    while (unassignedSensors.length > 0) {
+      const cluster = {
+        id: clusterId++,
+        sensors: [],
+        centroid: null
+      };
+
+      // Start with the first unassigned sensor
+      const seedSensor = unassignedSensors.shift();
+      cluster.sensors.push(seedSensor);
+
+      // Add nearby sensors to the cluster (up to maxNodesPerCluster)
+      while (cluster.sensors.length < maxNodesPerCluster && unassignedSensors.length > 0) {
+        let nearestSensor = null;
+        let minDistance = Infinity;
+        let nearestIndex = -1;
+
+        // Find the nearest unassigned sensor to the cluster centroid
+        const currentCentroid = this.calculateSensorClusterCentroid(cluster.sensors);
+
+        for (let i = 0; i < unassignedSensors.length; i++) {
+          const sensor = unassignedSensors[i];
+          const distance = Math.sqrt(
+            Math.pow(sensor.location.x - currentCentroid.x, 2) +
+            Math.pow(sensor.location.y - currentCentroid.y, 2)
+          );
+
+          if (distance < minDistance) {
+            minDistance = distance;
+            nearestSensor = sensor;
+            nearestIndex = i;
+          }
+        }
+
+        if (nearestSensor) {
+          cluster.sensors.push(nearestSensor);
+          unassignedSensors.splice(nearestIndex, 1);
+        } else {
+          break;
         }
       }
+
+      cluster.centroid = this.calculateSensorClusterCentroid(cluster.sensors);
+      clusters.push(cluster);
     }
 
-    console.log(`Placed ${positions.length} gateways to cover ${this.sensors.length} sensors`);
-    return positions;
+    console.log(`Created ${clusters.length} sensor clusters with max ${maxNodesPerCluster} sensors each`);
+    return clusters;
+  }
+
+  calculateSensorClusterCentroid(sensors) {
+    const totalX = sensors.reduce((sum, sensor) => sum + sensor.location.x, 0);
+    const totalY = sensors.reduce((sum, sensor) => sum + sensor.location.y, 0);
+    return {
+      x: totalX / sensors.length,
+      y: totalY / sensors.length
+    };
+  }
+
+  createGatewayClusters(sensorClusters, clusterRange, gatewayRange) {
+    const allGatewayPositions = [];
+
+    sensorClusters.forEach((sensorCluster, index) => {
+      // Determine number of gateways needed for this sensor cluster
+      const gatewaysNeeded = Math.max(1, Math.ceil(sensorCluster.sensors.length / 3)); // 1-2 gateways per sensor cluster
+
+      // Create gateway positions within clusterRange of each other
+      const gatewayCluster = this.createSingleGatewayCluster(
+        sensorCluster.centroid,
+        gatewaysNeeded,
+        clusterRange,
+        gatewayRange,
+        index + 1
+      );
+
+      allGatewayPositions.push(...gatewayCluster);
+    });
+
+    return allGatewayPositions;
+  }
+
+  createSingleGatewayCluster(centerPoint, gatewayCount, clusterRange, gatewayRange, clusterId) {
+    const gatewayPositions = [];
+
+    // First gateway at the center point (adjusted to be within grid bounds)
+    const firstGateway = {
+      x: Math.max(2, Math.min(this.config.gridWidth - 2, centerPoint.x)),
+      y: Math.max(2, Math.min(this.config.gridHeight - 2, centerPoint.y)),
+      clusterId: clusterId
+    };
+    gatewayPositions.push(firstGateway);
+
+    // Add additional gateways within clusterRange
+    for (let i = 1; i < gatewayCount; i++) {
+      let attempts = 0;
+      let validPosition = null;
+
+      while (attempts < 20 && !validPosition) {
+        // Random position within clusterRange of the first gateway
+        const angle = (Math.PI * 2 * i) / gatewayCount; // Distribute evenly around circle
+        const distance = Math.random() * clusterRange;
+
+        const x = firstGateway.x + distance * Math.cos(angle);
+        const y = firstGateway.y + distance * Math.sin(angle);
+
+        // Check if position is within grid bounds
+        if (x >= 2 && x <= this.config.gridWidth - 2 &&
+            y >= 2 && y <= this.config.gridHeight - 2) {
+
+          // Check if within clusterRange of other gateways in this cluster
+          const withinCluster = gatewayPositions.every(existingGW => {
+            const dist = Math.sqrt(
+              Math.pow(x - existingGW.x, 2) + Math.pow(y - existingGW.y, 2)
+            );
+            return dist <= clusterRange;
+          });
+
+          if (withinCluster) {
+            validPosition = { x, y, clusterId: clusterId };
+          }
+        }
+        attempts++;
+      }
+
+      if (validPosition) {
+        gatewayPositions.push(validPosition);
+      } else {
+        // Fallback: place near the first gateway
+        gatewayPositions.push({
+          x: Math.max(2, Math.min(this.config.gridWidth - 2, firstGateway.x + (i * 2))),
+          y: Math.max(2, Math.min(this.config.gridHeight - 2, firstGateway.y + 1)),
+          clusterId: clusterId
+        });
+      }
+    }
+
+    console.log(`Created gateway cluster ${clusterId} with ${gatewayPositions.length} gateways`);
+    return gatewayPositions;
   }
 
   findBestGatewayPosition(uncoveredSensors, existingGateways, gatewayRange) {

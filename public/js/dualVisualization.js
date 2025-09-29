@@ -14,7 +14,8 @@ class DualGridVisualization {
         this.padding = 40; // Padding to ensure edge sensors are visible
         this.scale = 1.0;
         this.showLabels = false;
-        this.viewMode = 'status';
+        this.flatViewMode = 'status';
+        this.federationViewMode = 'status';
 
         // Data storage
         this.flatData = { sensors: [] };
@@ -198,7 +199,7 @@ class DualGridVisualization {
         const radius = 8;
 
         // Sensor color based on status and view mode
-        let color = this.getSensorColor(sensor);
+        let color = this.getSensorColor(sensor, architecture);
 
         // Draw sensor circle
         ctx.fillStyle = color;
@@ -236,8 +237,11 @@ class DualGridVisualization {
         const y = this.padding + (gateway.location.y / this.gridHeight) * drawableHeight;
         const size = 12;
 
+        // Get cluster color based on clusterId
+        const clusterColor = this.getClusterColor(gateway.clusterId);
+
         // Gateway shape (diamond)
-        ctx.fillStyle = gateway.isActive ? '#f39c12' : '#e74c3c';
+        ctx.fillStyle = gateway.isActive ? clusterColor : '#e74c3c';
         ctx.beginPath();
         ctx.moveTo(x, y - size);
         ctx.lineTo(x + size, y);
@@ -246,13 +250,13 @@ class DualGridVisualization {
         ctx.closePath();
         ctx.fill();
 
-        // Gateway border
-        ctx.strokeStyle = '#e67e22';
+        // Gateway border (darker version of cluster color)
+        ctx.strokeStyle = this.getDarkerClusterColor(gateway.clusterId);
         ctx.lineWidth = 3;
         ctx.stroke();
 
         // Gateway communication range
-        if (this.viewMode === 'connectivity') {
+        if (this.federationViewMode === 'connectivity') {
             ctx.strokeStyle = 'rgba(243, 156, 18, 0.3)';
             ctx.lineWidth = 1;
             ctx.setLineDash([5, 5]);
@@ -274,8 +278,14 @@ class DualGridVisualization {
     }
 
     drawFlatCommunicationLines(ctx) {
-        if (this.viewMode !== 'connectivity') return;
+        if (this.flatViewMode === 'connectivity') {
+            this.drawServerConnections(ctx);
+        } else if (this.flatViewMode === 'interconnected') {
+            this.drawInterconnectedMesh(ctx);
+        }
+    }
 
+    drawServerConnections(ctx) {
         const drawableWidth = this.canvasWidth - (2 * this.padding);
         const drawableHeight = this.canvasHeight - (2 * this.padding);
 
@@ -312,11 +322,90 @@ class DualGridVisualization {
         ctx.fillText('CS', serverX, serverY + 15);
     }
 
-    drawFederationCommunicationLines(ctx) {
-        if (this.viewMode !== 'connectivity') return;
+    drawInterconnectedMesh(ctx) {
+        if (!this.flatData.sensors) return;
 
         const drawableWidth = this.canvasWidth - (2 * this.padding);
         const drawableHeight = this.canvasHeight - (2 * this.padding);
+        const communicationRange = 10; // Default communication range
+
+        ctx.strokeStyle = 'rgba(52, 152, 219, 0.4)';
+        ctx.lineWidth = 1;
+
+        // Draw connections between sensors within communication range
+        for (let i = 0; i < this.flatData.sensors.length; i++) {
+            const sensor1 = this.flatData.sensors[i];
+            if (!sensor1.isActive) continue;
+
+            const x1 = this.padding + (sensor1.location.x / this.gridWidth) * drawableWidth;
+            const y1 = this.padding + (sensor1.location.y / this.gridHeight) * drawableHeight;
+
+            // Check neighbors array if available, otherwise calculate distance
+            if (sensor1.neighbors && sensor1.neighbors.length > 0) {
+                sensor1.neighbors.forEach(neighborId => {
+                    const neighbor = this.flatData.sensors.find(s => s.id === neighborId);
+                    if (neighbor && neighbor.isActive) {
+                        const x2 = this.padding + (neighbor.location.x / this.gridWidth) * drawableWidth;
+                        const y2 = this.padding + (neighbor.location.y / this.gridHeight) * drawableHeight;
+
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+                    }
+                });
+            } else {
+                // Fallback: calculate connections based on distance
+                for (let j = i + 1; j < this.flatData.sensors.length; j++) {
+                    const sensor2 = this.flatData.sensors[j];
+                    if (!sensor2.isActive) continue;
+
+                    const distance = Math.sqrt(
+                        Math.pow(sensor1.location.x - sensor2.location.x, 2) +
+                        Math.pow(sensor1.location.y - sensor2.location.y, 2)
+                    );
+
+                    if (distance <= communicationRange) {
+                        const x2 = this.padding + (sensor2.location.x / this.gridWidth) * drawableWidth;
+                        const y2 = this.padding + (sensor2.location.y / this.gridHeight) * drawableHeight;
+
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        // Draw communication range circles for active sensors
+        ctx.strokeStyle = 'rgba(52, 152, 219, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+
+        this.flatData.sensors?.forEach(sensor => {
+            if (sensor.isActive) {
+                const x = this.padding + (sensor.location.x / this.gridWidth) * drawableWidth;
+                const y = this.padding + (sensor.location.y / this.gridHeight) * drawableHeight;
+                const range = (communicationRange / this.gridWidth) * drawableWidth;
+
+                ctx.beginPath();
+                ctx.arc(x, y, range, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+        });
+
+        ctx.setLineDash([]);
+    }
+
+    drawFederationCommunicationLines(ctx) {
+        if (this.federationViewMode !== 'connectivity') return;
+
+        const drawableWidth = this.canvasWidth - (2 * this.padding);
+        const drawableHeight = this.canvasHeight - (2 * this.padding);
+
+        // Draw gateway cluster connections (5m range clustering)
+        this.drawGatewayClusterConnections(ctx, drawableWidth, drawableHeight);
 
         // Draw lines from sensors to assigned gateways
         ctx.strokeStyle = 'rgba(52, 152, 219, 0.6)';
@@ -372,8 +461,61 @@ class DualGridVisualization {
         ctx.fillText('CS', serverX, serverY + 18);
     }
 
-    getSensorColor(sensor) {
-        switch (this.viewMode) {
+    drawGatewayClusterConnections(ctx, drawableWidth, drawableHeight) {
+        if (!this.federationData.gateways) return;
+
+        const clusterRange = 5; // 5m clustering range
+        const clusterRangePixels = (clusterRange / this.gridWidth) * drawableWidth;
+
+        // Group gateways by cluster
+        const clusters = {};
+        this.federationData.gateways.forEach(gateway => {
+            const clusterId = gateway.clusterId || 1;
+            if (!clusters[clusterId]) {
+                clusters[clusterId] = [];
+            }
+            clusters[clusterId].push(gateway);
+        });
+
+        // Draw connections within each cluster
+        Object.values(clusters).forEach(clusterGateways => {
+            if (clusterGateways.length < 2) return;
+
+            const clusterColor = this.getClusterColor(clusterGateways[0].clusterId);
+            ctx.strokeStyle = clusterColor + '80'; // Add transparency
+            ctx.lineWidth = 2;
+            ctx.setLineDash([3, 3]);
+
+            // Connect all gateways in the cluster
+            for (let i = 0; i < clusterGateways.length; i++) {
+                for (let j = i + 1; j < clusterGateways.length; j++) {
+                    const gw1 = clusterGateways[i];
+                    const gw2 = clusterGateways[j];
+
+                    const x1 = this.padding + (gw1.location.x / this.gridWidth) * drawableWidth;
+                    const y1 = this.padding + (gw1.location.y / this.gridHeight) * drawableHeight;
+                    const x2 = this.padding + (gw2.location.x / this.gridWidth) * drawableWidth;
+                    const y2 = this.padding + (gw2.location.y / this.gridHeight) * drawableHeight;
+
+                    // Only draw if within cluster range
+                    const distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+                    if (distance <= clusterRangePixels * 1.5) { // Allow some tolerance
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            ctx.setLineDash([]);
+        });
+    }
+
+    getSensorColor(sensor, architecture) {
+        const viewMode = architecture === 'flat' ? this.flatViewMode : this.federationViewMode;
+
+        switch (viewMode) {
             case 'battery':
                 const batteryHue = sensor.batteryLevel * 120; // Green to red
                 return `hsl(${batteryHue}, 70%, 50%)`;
@@ -383,6 +525,7 @@ class DualGridVisualization {
                 if (sensor.waterLevel > 0.5) return '#f1c40f';
                 return '#2ecc71';
             case 'connectivity':
+            case 'interconnected':
                 return sensor.isActive ? '#3498db' : '#e74c3c';
             default: // status
                 return sensor.isActive ? '#2ecc71' : '#e74c3c';
@@ -421,8 +564,13 @@ class DualGridVisualization {
     }
 
     // Control methods
-    setViewMode(mode) {
-        this.viewMode = mode;
+    setViewMode(mode, architecture = 'both') {
+        if (architecture === 'flat' || architecture === 'both') {
+            this.flatViewMode = mode;
+        }
+        if (architecture === 'federation' || architecture === 'both') {
+            this.federationViewMode = mode;
+        }
         this.draw();
     }
 
@@ -434,6 +582,35 @@ class DualGridVisualization {
     zoom(factor) {
         this.scale *= factor;
         this.draw();
+    }
+
+    // Cluster color management
+    getClusterColor(clusterId) {
+        const colors = [
+            '#f39c12', // Orange
+            '#3498db', // Blue
+            '#e74c3c', // Red
+            '#2ecc71', // Green
+            '#9b59b6', // Purple
+            '#1abc9c', // Turquoise
+            '#f1c40f', // Yellow
+            '#e67e22', // Dark Orange
+        ];
+        return colors[(clusterId - 1) % colors.length] || '#f39c12';
+    }
+
+    getDarkerClusterColor(clusterId) {
+        const colors = [
+            '#e67e22', // Darker Orange
+            '#2980b9', // Darker Blue
+            '#c0392b', // Darker Red
+            '#27ae60', // Darker Green
+            '#8e44ad', // Darker Purple
+            '#16a085', // Darker Turquoise
+            '#d4a300', // Darker Yellow
+            '#d35400', // Darker Orange
+        ];
+        return colors[(clusterId - 1) % colors.length] || '#e67e22';
     }
 }
 

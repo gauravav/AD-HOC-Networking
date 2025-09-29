@@ -160,7 +160,7 @@ class FloodWatchApp {
         });
 
         document.getElementById('flat-view-mode')?.addEventListener('change', (e) => {
-            this.dualGridVis.setViewMode(e.target.value);
+            this.dualGridVis.setViewMode(e.target.value, 'flat');
         });
 
         // Federation architecture controls
@@ -177,7 +177,7 @@ class FloodWatchApp {
         });
 
         document.getElementById('fed-view-mode')?.addEventListener('change', (e) => {
-            this.dualGridVis.setViewMode(e.target.value);
+            this.dualGridVis.setViewMode(e.target.value, 'federation');
         });
     }
 
