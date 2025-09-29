@@ -180,7 +180,7 @@ class GatewayAgent {
   // Check if any connected sensor has high water level
   hasFloodingAlert() {
     return Array.from(this.sensorData.values())
-      .some(data => data.waterLevel > 1.5);
+      .some(data => data.waterLevel > 1.0);
   }
 
   // Get statistics for this gateway

@@ -36,7 +36,7 @@ class FloodIncident {
       this.severity = 'CRITICAL';
     } else if (maxWaterLevel > 2.0 || sensorCount > 5) {
       this.severity = 'HIGH';
-    } else if (maxWaterLevel > 1.5 || sensorCount > 2) {
+    } else if (maxWaterLevel > 1.0 || sensorCount > 2) {
       this.severity = 'MEDIUM';
     } else {
       this.severity = 'LOW';
@@ -54,7 +54,7 @@ class FloodIncident {
     return Math.max(...this.alerts.map(a => a.data.waterLevel));
   }
 
-  hasActiveFlooding(threshold = 1.5) {
+  hasActiveFlooding(threshold = 1.0) {
     // Check if any sensor still detects water above threshold
     return this.alerts.some(alert => alert.data.waterLevel > threshold);
   }
@@ -190,7 +190,7 @@ class CoordinationAgent {
 
     if (waterLevel > 3.0) return 'CRITICAL';
     if (waterLevel > 2.0) return 'HIGH';
-    if (waterLevel > 1.5) return 'MEDIUM';
+    if (waterLevel > 1.0) return 'MEDIUM';
     return 'LOW';
   }
 
@@ -214,7 +214,7 @@ class CoordinationAgent {
     for (const [incidentId, incident] of this.incidents.entries()) {
       if (incident.status === 'ACTIVE') {
         // Check if incident should be resolved due to water levels dropping
-        if (!incident.hasActiveFlooding(1.5)) {
+        if (!incident.hasActiveFlooding(1.0)) {
           incident.status = 'RESOLVED';
           console.log(`Incident ${incidentId} resolved - no active flooding detected`);
         }

@@ -42,14 +42,14 @@ constructor(id, x, y, communicationRange = 5) {
     this.communicationRange = 5;           // Radio transmission range
     this.batteryLevel = 0.7-1.0;          // Random initial battery (70-100%)
     this.waterLevel = 0;                   // Current water reading
-    this.waterThreshold = 1.5;             // Flood detection threshold (meters)
+    this.waterThreshold = 1.0;             // Flood detection threshold (meters)
     this.hasGatewayConnection = 10%;       // Probability of direct gateway access
 }
 ```
 
 **Key Methods:**
 - `updateWaterLevel(level)`: Updates water reading and triggers flood detection if threshold exceeded
-- `detectFlood()`: Creates and broadcasts ALERT messages when water > 1.5m
+- `detectFlood()`: Creates and broadcasts ALERT messages when water > 1.0m
 - `broadcastHello()`: Sends periodic neighbor discovery messages (30-60s intervals)
 - `receiveMessage(message, fromAgent)`: Processes incoming messages with distance validation
 - `forwardAlert(message)`: Multi-hop forwarding with hop count limiting (max 10 hops)
@@ -309,7 +309,7 @@ The simulation tracks key performance indicators:
 ### Node Properties
 - **Communication Range**: 5 units for sensors, 8 for relays
 - **Battery Life**: Degrades with message transmission
-- **Water Threshold**: 1.5m triggers flood alerts
+- **Water Threshold**: 1.0m triggers flood alerts
 - **Gateway Probability**: 10% of nodes have direct gateway access
 
 ## 🎯 Research Applications

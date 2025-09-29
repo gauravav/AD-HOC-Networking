@@ -304,7 +304,7 @@ Track and manage active flood events in real-time.
 // Automatic severity calculation
 if (maxWaterLevel > 3.0 || sensorCount > 10) → CRITICAL
 if (maxWaterLevel > 2.0 || sensorCount > 5)  → HIGH
-if (maxWaterLevel > 1.5 || sensorCount > 2)  → MEDIUM
+if (maxWaterLevel > 1.0 || sensorCount > 2)  → MEDIUM
 else                                          → LOW
 ```
 

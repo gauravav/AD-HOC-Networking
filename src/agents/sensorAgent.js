@@ -8,7 +8,7 @@ class SensorAgent {
     this.maxNeighbors = maxNeighbors; // max number of neighbors to maintain
     this.batteryLevel = Math.random() * 0.3 + 0.7; // 70-100%
     this.waterLevel = 0;
-    this.waterThreshold = 1.5; // meters
+    this.waterThreshold = 1.0; // meters
     this.isActive = true;
     this.isFlooding = false; // Track if flooding is detected
 
@@ -48,6 +48,16 @@ class SensorAgent {
 
   updateWaterLevel(level) {
     this.waterLevel = level;
+
+    // Check for sensor failure when water level exceeds 2m
+    if (level > 2.0 && this.isActive) {
+      // Randomly fail one of the sensors in the flood zone
+      // This sensor has a chance to fail due to high water level
+      if (Math.random() < 0.3) { // 30% chance of failure when water exceeds 2m
+        this.fail();
+        return; // Exit early since sensor has failed
+      }
+    }
 
     if (level > this.waterThreshold && this.isActive) {
       if (!this.isFlooding) {
