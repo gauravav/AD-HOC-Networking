@@ -80,8 +80,24 @@ class FloodWatchApp {
         });
 
         // Central server console controls
-        document.getElementById('clear-server-log').addEventListener('click', () => {
-            this.clearServerLog();
+        document.getElementById('clear-flat-server-log').addEventListener('click', () => {
+            this.clearFlatServerLog();
+        });
+
+        document.getElementById('clear-fed-server-log').addEventListener('click', () => {
+            this.clearFedServerLog();
+        });
+
+        document.getElementById('clear-all-server-logs').addEventListener('click', () => {
+            this.clearAllServerLogs();
+        });
+
+        document.getElementById('test-flat-message').addEventListener('click', () => {
+            this.sendTestMessage('flat');
+        });
+
+        document.getElementById('test-fed-message').addEventListener('click', () => {
+            this.sendTestMessage('federation');
         });
 
         // Grid click handler
@@ -224,7 +240,7 @@ class FloodWatchApp {
         this.stopSimulation();
         setTimeout(() => {
             this.clearLog();
-            this.clearServerLog();
+            this.clearAllServerLogs();
             this.clearIncidents();
             this.clearMetrics();
             this.dualGridVis.floodAreas = [];
@@ -511,26 +527,61 @@ class FloodWatchApp {
     }
 
     handleServerMessage(data) {
-        this.serverStats.totalMessages++;
+        // Determine if this is a flat or federation message based on data properties
+        const isFederationMessage = data.isGateway || data.routedThrough || data.architecture === 'federation';
 
-        if (data.type === 'ALERT') {
-            this.serverStats.alertMessages++;
+        if (isFederationMessage) {
+            this.handleFederationServerMessage(data);
+        } else {
+            this.handleFlatServerMessage(data);
         }
-
-        this.serverStats.lastMessage = data;
-
-        // Update server stats display
-        document.getElementById('server-msg-count').textContent = this.serverStats.totalMessages;
-        document.getElementById('server-alert-count').textContent = this.serverStats.alertMessages;
-        document.getElementById('server-last-msg').textContent =
-            `${data.type} from ${data.sender} at (${data.location.x}, ${data.location.y})`;
-
-        // Add to server log
-        this.logServerMessage(data);
     }
 
-    logServerMessage(data) {
-        const serverLogContent = document.getElementById('server-log-content');
+    handleFlatServerMessage(data) {
+        // Update flat architecture stats
+        const currentMessages = parseInt(document.getElementById('flat-server-msg-count').textContent) || 0;
+        const currentAlerts = parseInt(document.getElementById('flat-server-alert-count').textContent) || 0;
+
+        document.getElementById('flat-server-msg-count').textContent = currentMessages + 1;
+
+        if (data.type === 'ALERT') {
+            document.getElementById('flat-server-alert-count').textContent = currentAlerts + 1;
+        }
+
+        document.getElementById('flat-server-last-msg').textContent =
+            `${data.type} from ${data.sender} at (${data.location.x}, ${data.location.y})`;
+
+        // Add to flat server log
+        this.logServerMessage(data, 'flat');
+    }
+
+    handleFederationServerMessage(data) {
+        // Update federation architecture stats
+        const currentMessages = parseInt(document.getElementById('fed-server-msg-count').textContent) || 0;
+        const currentAlerts = parseInt(document.getElementById('fed-server-alert-count').textContent) || 0;
+
+        document.getElementById('fed-server-msg-count').textContent = currentMessages + 1;
+
+        if (data.type === 'ALERT') {
+            document.getElementById('fed-server-alert-count').textContent = currentAlerts + 1;
+        }
+
+        document.getElementById('fed-server-last-msg').textContent =
+            `${data.type} from ${data.sender} at (${data.location.x}, ${data.location.y})`;
+
+        // Add to federation server log
+        this.logServerMessage(data, 'federation');
+    }
+
+    logServerMessage(data, architecture = 'flat') {
+        const logContentId = architecture === 'federation' ? 'fed-server-log-content' : 'flat-server-log-content';
+        const serverLogContent = document.getElementById(logContentId);
+
+        if (!serverLogContent) {
+            console.error(`Server log content not found for architecture: ${architecture}`);
+            return;
+        }
+
         const timestamp = new Date().toLocaleTimeString();
 
         const logEntry = document.createElement('div');
@@ -548,10 +599,16 @@ class FloodWatchApp {
             messageDetails = `Battery: ${battery} | Neighbors[${neighborCount}]: ${neighborList}`;
         }
 
+        // Add architecture-specific details
+        let architectureInfo = '';
+        if (architecture === 'federation' && (data.isGateway || data.routedThrough)) {
+            architectureInfo = data.isGateway ? ' [Gateway]' : ` [via ${data.routedThrough}]`;
+        }
+
         logEntry.innerHTML = `
             <span class="server-timestamp">[${timestamp}]</span>
             <span class="server-msg-type">${data.type}</span>
-            <span class="server-sender">from ${data.sender}</span>
+            <span class="server-sender">from ${data.sender}${architectureInfo}</span>
             <span class="server-location">@(${data.location.x}, ${data.location.y})</span>
             ${messageDetails ? `<span class="server-details">${messageDetails}</span>` : ''}
         `;
@@ -569,16 +626,58 @@ class FloodWatchApp {
         }
     }
 
-    clearServerLog() {
-        document.getElementById('server-log-content').innerHTML = '';
-        this.serverStats = {
-            totalMessages: 0,
-            alertMessages: 0,
-            lastMessage: null
+    clearFlatServerLog() {
+        const flatLogContent = document.getElementById('flat-server-log-content');
+        if (flatLogContent) {
+            flatLogContent.innerHTML = '';
+        }
+        document.getElementById('flat-server-msg-count').textContent = '0';
+        document.getElementById('flat-server-alert-count').textContent = '0';
+        document.getElementById('flat-server-last-msg').textContent = 'None';
+    }
+
+    clearFedServerLog() {
+        const fedLogContent = document.getElementById('fed-server-log-content');
+        if (fedLogContent) {
+            fedLogContent.innerHTML = '';
+        }
+        document.getElementById('fed-server-msg-count').textContent = '0';
+        document.getElementById('fed-server-alert-count').textContent = '0';
+        document.getElementById('fed-server-last-msg').textContent = 'None';
+    }
+
+    clearAllServerLogs() {
+        this.clearFlatServerLog();
+        this.clearFedServerLog();
+    }
+
+    sendTestMessage(architecture) {
+        // Create a test message to verify the console is working
+        const testMessage = {
+            type: 'HELLO',
+            sender: `TEST-SENSOR-${Math.floor(Math.random() * 100)}`,
+            location: {
+                x: Math.floor(Math.random() * 25),
+                y: Math.floor(Math.random() * 25)
+            },
+            data: {
+                batteryLevel: Math.random() * 100,
+                neighbors: [
+                    { id: `NEIGHBOR-${Math.floor(Math.random() * 10)}` },
+                    { id: `NEIGHBOR-${Math.floor(Math.random() * 10)}` }
+                ]
+            },
+            timestamp: Date.now()
         };
-        document.getElementById('server-msg-count').textContent = '0';
-        document.getElementById('server-alert-count').textContent = '0';
-        document.getElementById('server-last-msg').textContent = 'None';
+
+        if (architecture === 'federation') {
+            testMessage.isGateway = Math.random() > 0.5;
+            testMessage.routedThrough = testMessage.isGateway ? null : `GATEWAY-${Math.floor(Math.random() * 5)}`;
+            testMessage.architecture = 'federation';
+        }
+
+        // Simulate receiving the message
+        this.handleServerMessage(testMessage);
     }
 }
 

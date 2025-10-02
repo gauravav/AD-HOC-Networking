@@ -44,6 +44,19 @@ class FloodWatchSimulation {
     // Active floods tracking
     this.activeFloods = new Map();
 
+    // Round-robin communication scheduling
+    this.roundRobinScheduler = {
+      flatArchitecture: {
+        currentSensorIndex: 0,
+        sensorOrder: []
+      },
+      federationArchitecture: {
+        currentSectorIndex: 0,
+        sectorOrder: [],
+        sectors: new Map() // sectorId -> [sensors]
+      }
+    };
+
     this.simulationLog = [];
     this.initializeNetwork();
   }
@@ -65,6 +78,9 @@ class FloodWatchSimulation {
 
     // Initialize neighbor discovery
     this.discoverNeighbors();
+
+    // Initialize round-robin scheduling
+    this.initializeRoundRobinScheduling();
 
     this.log('Network initialized', {
       sensors: totalNodes,
@@ -128,6 +144,43 @@ class FloodWatchSimulation {
     }
   }
 
+  initializeRoundRobinScheduling() {
+    // Set up flat architecture round-robin
+    this.roundRobinScheduler.flatArchitecture.sensorOrder = [...this.sensors];
+
+    // Set up federation architecture sectors (divide grid into 4 sectors)
+    const sectorsPerRow = 2;
+    const sectorsPerCol = 2;
+    const sectorWidth = Math.ceil(this.config.gridWidth / sectorsPerRow);
+    const sectorHeight = Math.ceil(this.config.gridHeight / sectorsPerCol);
+
+    // Initialize sectors
+    for (let sectorRow = 0; sectorRow < sectorsPerCol; sectorRow++) {
+      for (let sectorCol = 0; sectorCol < sectorsPerRow; sectorCol++) {
+        const sectorId = `SECTOR-${sectorRow}-${sectorCol}`;
+        this.roundRobinScheduler.federationArchitecture.sectors.set(sectorId, []);
+        this.roundRobinScheduler.federationArchitecture.sectorOrder.push(sectorId);
+      }
+    }
+
+    // Assign sensors to sectors
+    for (const sensor of this.sensors) {
+      const sectorRow = Math.floor(sensor.location.y / sectorHeight);
+      const sectorCol = Math.floor(sensor.location.x / sectorWidth);
+      const sectorId = `SECTOR-${sectorRow}-${sectorCol}`;
+
+      if (this.roundRobinScheduler.federationArchitecture.sectors.has(sectorId)) {
+        this.roundRobinScheduler.federationArchitecture.sectors.get(sectorId).push(sensor);
+        sensor.federationSector = sectorId;
+      }
+    }
+
+    this.log('Round-robin scheduling initialized', {
+      flatSensors: this.roundRobinScheduler.flatArchitecture.sensorOrder.length,
+      federationSectors: this.roundRobinScheduler.federationArchitecture.sectorOrder.length
+    });
+  }
+
   start() {
     if (this.isRunning) return;
 
@@ -159,6 +212,9 @@ class FloodWatchSimulation {
   tick() {
     this.currentTick++;
 
+    // Process round-robin communication first
+    this.processRoundRobinCommunication();
+
     // Process messages between agents
     this.processMessagePropagation();
 
@@ -177,6 +233,80 @@ class FloodWatchSimulation {
     if (this.currentTick % 10 === 0) { // Every 10 ticks
       this.emitStatusUpdate();
     }
+  }
+
+  processRoundRobinCommunication() {
+    // Each tick (second), one sensor sends data in round-robin fashion
+
+    // Flat Architecture: Each sensor sends data to central server in turn
+    this.processRoundRobinFlat();
+
+    // Federation Architecture: Each sector's sensors send data to their gateway in turn
+    this.processRoundRobinFederation();
+  }
+
+  processRoundRobinFlat() {
+    const scheduler = this.roundRobinScheduler.flatArchitecture;
+
+    if (scheduler.sensorOrder.length === 0) return;
+
+    // Get the current sensor in the round-robin sequence
+    const currentSensor = scheduler.sensorOrder[scheduler.currentSensorIndex];
+
+    // Only send if sensor is active
+    if (currentSensor && currentSensor.isActive) {
+      // Create a scheduled data message (HELLO with current status)
+      const dataMessage = currentSensor.createScheduledDataMessage();
+
+      // Send directly to central server for flat architecture
+      this.deliverToCentralServer(dataMessage, currentSensor, 'flat');
+
+      this.log(`🔄 [FLAT] Sensor ${currentSensor.id} sent scheduled data (round-robin)`, {
+        sensor: currentSensor.id,
+        position: scheduler.currentSensorIndex + 1,
+        total: scheduler.sensorOrder.length,
+        architecture: 'flat'
+      });
+    }
+
+    // Move to next sensor in the sequence
+    scheduler.currentSensorIndex = (scheduler.currentSensorIndex + 1) % scheduler.sensorOrder.length;
+  }
+
+  processRoundRobinFederation() {
+    const scheduler = this.roundRobinScheduler.federationArchitecture;
+
+    if (scheduler.sectorOrder.length === 0) return;
+
+    // Get the current sector in the round-robin sequence
+    const currentSectorId = scheduler.sectorOrder[scheduler.currentSectorIndex];
+    const sectorSensors = scheduler.sectors.get(currentSectorId) || [];
+
+    // Find an active sensor in this sector to send data
+    const activeSensors = sectorSensors.filter(sensor => sensor.isActive);
+
+    if (activeSensors.length > 0) {
+      // Rotate through sensors in this sector
+      const sensorIndex = this.currentTick % activeSensors.length;
+      const currentSensor = activeSensors[sensorIndex];
+
+      // Create a scheduled data message
+      const dataMessage = currentSensor.createScheduledDataMessage();
+
+      // Send to gateway (simulated as central server with federation flag)
+      this.deliverToCentralServer(dataMessage, currentSensor, 'federation');
+
+      this.log(`🔄 [FED] Sensor ${currentSensor.id} from ${currentSectorId} sent scheduled data (round-robin)`, {
+        sensor: currentSensor.id,
+        sector: currentSectorId,
+        sectorPosition: scheduler.currentSectorIndex + 1,
+        totalSectors: scheduler.sectorOrder.length,
+        architecture: 'federation'
+      });
+    }
+
+    // Move to next sector in the sequence
+    scheduler.currentSectorIndex = (scheduler.currentSectorIndex + 1) % scheduler.sectorOrder.length;
   }
 
   processMessagePropagation() {
@@ -242,13 +372,14 @@ class FloodWatchSimulation {
     this.metrics.messagesDelivered += deliveredCount;
   }
 
-  deliverToCentralServer(message, sender) {
+  deliverToCentralServer(message, sender, architecture = 'flat') {
     // Central server receives all messages (100% delivery)
     const serverMessage = {
       message,
       sender: sender.id,
       timestamp: Date.now(),
-      location: sender.location
+      location: sender.location,
+      architecture: architecture
     };
 
     this.centralServer.messagesReceived.push(serverMessage);
@@ -263,14 +394,25 @@ class FloodWatchSimulation {
       }
     }
 
-    // Emit central server message for UI
-    this.emit('central-server-message', {
+    // Add architecture-specific metadata for UI
+    const uiMessage = {
       type: message.type,
       sender: sender.id,
       location: sender.location,
       data: message.data || message,
-      timestamp: Date.now()
-    });
+      timestamp: Date.now(),
+      architecture: architecture
+    };
+
+    // Add federation-specific information
+    if (architecture === 'federation' && sender.federationSector) {
+      uiMessage.isGateway = false;
+      uiMessage.routedThrough = `GATEWAY-${sender.federationSector}`;
+      uiMessage.sector = sender.federationSector;
+    }
+
+    // Emit central server message for UI
+    this.emit('central-server-message', uiMessage);
 
     // Node activity tracking disabled
 
@@ -394,7 +536,6 @@ class FloodWatchSimulation {
     for (const [floodId, flood] of this.activeFloods.entries()) {
       const elapsedTime = now - flood.startTime;
       const buildupTime = flood.duration * 0.3; // 30% of time to reach max level
-      const sustainTime = flood.duration * 0.7; // 70% of time at max level
 
       let progress, currentWaterLevel;
 

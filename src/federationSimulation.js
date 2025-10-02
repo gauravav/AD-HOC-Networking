@@ -494,6 +494,9 @@ class FederationSimulation extends FloodWatchSimulation {
 
     this.currentTick++;
 
+    // Process round-robin communication first (from parent class)
+    this.processRoundRobinCommunication();
+
     // Process both flat and federation architectures
     this.processFlatArchitecture();
     this.processFederationArchitecture();
@@ -501,16 +504,19 @@ class FederationSimulation extends FloodWatchSimulation {
     // Process active floods (shared between both)
     const affectedNodes = this.processActiveFloods();
 
-    // Process coordination through message delivery (handled in deliverToCentralServer methods)
+    // Process coordination (incident management)
+    this.processIncidentCoordination();
 
     // Calculate metrics for both architectures
     this.calculateDualMetrics();
 
-    // Send status update to client
-    this.sendStatusUpdate();
+    // Update metrics
+    this.updateMetrics();
 
-    // Schedule next tick
-    setTimeout(() => this.tick(), this.config.simulationSpeed);
+    // Send status update to client
+    if (this.currentTick % 10 === 0) { // Every 10 ticks
+      this.sendStatusUpdate();
+    }
   }
 
   processFlatArchitecture() {
@@ -548,7 +554,7 @@ class FederationSimulation extends FloodWatchSimulation {
 
     // Process flat messages through coordination agent
     for (const msgData of centralServerMessages) {
-      this.deliverToCentralServer(msgData.message, msgData.sender);
+      this.deliverToCentralServer(msgData.message, msgData.sender, 'flat');
     }
   }
 
@@ -647,7 +653,9 @@ class FederationSimulation extends FloodWatchSimulation {
       location: originalSender.location,
       data: message.data,
       hops: message.hops || 1,
-      architecture: 'federation'
+      architecture: 'federation',
+      isGateway: false,
+      routedThrough: `GATEWAY-${message.gatewayId || 'UNKNOWN'}`
     });
   }
 

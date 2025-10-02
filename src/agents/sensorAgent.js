@@ -28,13 +28,11 @@ class SensorAgent {
   }
 
   startPeriodicTasks() {
-    // Send HELLO messages every 30-60 seconds
-    const helloIntervalMs = (30 + Math.random() * 30) * 1000;
-    this.helloInterval = setInterval(() => {
-      if (this.isActive) {
-        this.broadcastHello();
-      }
-    }, helloIntervalMs);
+    // Disable random HELLO messages - now using round-robin scheduling
+    // HELLO messages are now sent via scheduled round-robin communication
+
+    // Keep this method for potential future use or water reporting
+    // Individual sensors no longer send random HELLO messages
   }
 
   stop() {
@@ -127,7 +125,8 @@ class SensorAgent {
   }
 
   broadcastHello() {
-    // Get only the nearest neighbors up to maxNeighbors limit
+    // Emergency broadcast HELLO (used only for flooding/critical situations)
+    // Regular HELLO messages are now sent via round-robin scheduling
     const nearestNeighbors = this.getNearestNeighbors();
 
     const hello = new HelloMessage(
@@ -137,11 +136,13 @@ class SensorAgent {
       nearestNeighbors
     );
 
-    // Always send to central server (100% chance)
-    if (Math.random() < 1) {
-      this.deliverToCentralServer(hello);
-    }
+    // Mark as emergency broadcast
+    hello.data.emergencyBroadcast = true;
 
+    // Send to central server for emergency situations
+    this.deliverToCentralServer(hello);
+
+    // Also broadcast to neighbors for emergency coordination
     this.broadcastMessage(hello);
   }
 
@@ -321,6 +322,30 @@ class SensorAgent {
         });
       });
     }
+  }
+
+  createScheduledDataMessage() {
+    // Create a HELLO message for scheduled round-robin communication
+    const nearestNeighbors = this.getNearestNeighbors();
+
+    const hello = new HelloMessage(
+      this.id,
+      this.batteryLevel,
+      this.location,
+      nearestNeighbors
+    );
+
+    // Add additional sensor data for scheduled transmission
+    hello.data = {
+      ...hello.data,
+      waterLevel: this.waterLevel,
+      isFlooding: this.isFlooding,
+      lastHeartbeat: this.lastHeartbeat,
+      scheduledTransmission: true,
+      timestamp: Date.now()
+    };
+
+    return hello;
   }
 
   getStatus() {

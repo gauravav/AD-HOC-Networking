@@ -674,33 +674,46 @@ footer {
     line-height: 1.4;
 }
 
+/* Server log entries styled like simulation log entries */
 .server-log-entry {
-    padding: 0.25rem 0;
-    border-bottom: 1px solid #f8f9fa;
+    margin-bottom: 0.5rem;
+    padding: 0.25rem;
+    border-radius: 4px;
     display: flex;
     gap: 0.5rem;
     align-items: center;
     flex-wrap: wrap;
+    flex-shrink: 0;
+    min-height: auto;
+    word-wrap: break-word;
+    border-bottom: none;
 }
 
 .server-log-entry:last-child {
     border-bottom: none;
 }
 
+/* Server log entry types styled like simulation log entries */
 .server-log-entry.alert {
-    background: rgba(220, 53, 69, 0.1);
-    border-left: 3px solid #dc3545;
-    padding-left: 0.5rem;
+    background: rgba(231, 76, 60, 0.2);
 }
 
 .server-log-entry.hello {
-    background: rgba(40, 167, 69, 0.1);
-    border-left: 3px solid #28a745;
-    padding-left: 0.5rem;
+    background: rgba(52, 152, 219, 0.2);
 }
 
+.server-log-entry.warning {
+    background: rgba(243, 156, 18, 0.2);
+}
+
+.server-log-entry.error {
+    background: rgba(231, 76, 60, 0.2);
+}
+
+/* Server log text styling to match simulation log */
 .server-timestamp {
-    color: #6c757d;
+    color: #95a5a6;
+    font-size: 0.8rem;
     font-weight: bold;
     min-width: 80px;
 }
@@ -725,8 +738,184 @@ footer {
 }
 
 .server-sender {
-    color: #495057;
+    color: #ecf0f1;
     font-weight: 600;
+    min-width: 80px;
+}
+
+.server-location {
+    color: #ecf0f1;
+    font-weight: 500;
+    min-width: 70px;
+}
+
+.server-details {
+    color: #ecf0f1;
+    font-weight: 500;
+    background: rgba(253, 126, 20, 0.3);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+}
+
+/* Dual Server Console Styles */
+.server-architecture-toggle {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    justify-content: center;
+    background: rgba(248, 249, 250, 0.8);
+    padding: 0.75rem;
+    border-radius: 8px;
+}
+
+.server-architecture-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 6px;
+    transition: background-color 0.2s;
+}
+
+.server-architecture-toggle label:hover {
+    background: rgba(33, 150, 243, 0.1);
+}
+
+.server-architecture-toggle input[type="radio"]:checked + span {
+    color: #2196F3;
+    font-weight: bold;
+}
+
+.dual-server-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.server-section {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    width: 100%;
+}
+
+.server-section h3 {
+    margin-bottom: 1rem;
+    color: #495057;
+    font-size: 1.1rem;
+    text-align: center;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid rgba(33, 150, 243, 0.2);
+}
+
+.server-section .server-stats {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: rgba(248, 249, 250, 0.3);
+    border-radius: 6px;
+}
+
+.server-section .server-log-container {
+    height: 250px;
+    overflow-y: auto;
+    border: 1px solid rgba(222, 226, 230, 0.5);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 0.5rem;
+}
+
+/* Simulation log style for both flat and federation server consoles */
+#flat-server-section .server-log-container,
+#federation-server-section .server-log-container {
+    background: #2c3e50 !important;
+    color: #ecf0f1 !important;
+    border-radius: 8px !important;
+    height: 300px !important;
+    max-height: 300px !important;
+    overflow: hidden !important;
+    font-family: 'Consolas', 'Monaco', monospace !important;
+    padding: 0;
+    box-sizing: border-box;
+    position: relative;
+    border: none !important;
+}
+
+/* Specific styling for flat and federation server log content (scrollable inner content) */
+#flat-server-log-content,
+#fed-server-log-content {
+    height: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    font-family: 'Consolas', 'Monaco', monospace !important;
+    font-size: 0.9rem !important;
+    line-height: 1.4 !important;
+    padding: 1rem !important;
+    box-sizing: border-box;
+    background: transparent !important;
+    color: #ecf0f1 !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* Ensure both server log containers are scrollable */
+.server-log-container {
+    height: 250px;
+    overflow-y: auto;
+    border: 1px solid rgba(222, 226, 230, 0.5);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 0.5rem;
+    box-sizing: border-box;
+}
+
+.server-global-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: rgba(248, 249, 250, 0.8);
+    border-radius: 6px;
+}
+
+/* Federation-specific message styling */
+.server-log-entry.federation {
+    background: rgba(156, 39, 176, 0.1);
+    border-left: 3px solid #9c27b0;
+    padding-left: 0.5rem;
+}
+
+.server-log-entry.federation .server-msg-type {
+    background: #9c27b0;
+}
+
+.gateway-info {
+    color: #6c757d;
+    font-size: 0.8rem;
+    font-style: italic;
+}
+
+/* Responsive design for dual server console */
+@media (max-width: 768px) {
+    .dual-server-container {
+        gap: 1rem;
+    }
+
+    .server-section .server-log-container {
+        height: 250px;
+    }
+}
     min-width: 80px;
 }
 

@@ -230,30 +230,84 @@
         </section>
 
 
-        <!-- Central Server Console -->
+        <!-- Dual Central Server Console -->
         <section id="central-server-panel" class="panel">
             <h2>💻 Central Server Console</h2>
-            <div class="server-stats">
-                <div class="stat-item">
-                    <span class="label">Messages Received:</span>
-                    <span id="server-msg-count" class="value">0</span>
+
+            <!-- Architecture Toggle -->
+            <div class="server-architecture-toggle">
+                <label>
+                    <input type="radio" name="server-view" value="both" checked>
+                    <span>Both Architectures</span>
+                </label>
+                <label>
+                    <input type="radio" name="server-view" value="flat">
+                    <span>Flat Only</span>
+                </label>
+                <label>
+                    <input type="radio" name="server-view" value="federation">
+                    <span>Federation Only</span>
+                </label>
+            </div>
+
+            <div class="dual-server-container">
+                <!-- Flat Architecture Console -->
+                <div class="server-section" id="flat-server-section">
+                    <h3>📡 Flat Architecture Messages</h3>
+                    <div class="server-stats">
+                        <div class="stat-item">
+                            <span class="label">Direct Messages:</span>
+                            <span id="flat-server-msg-count" class="value">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="label">Alert Messages:</span>
+                            <span id="flat-server-alert-count" class="value">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="label">Last Message:</span>
+                            <span id="flat-server-last-msg" class="value">None</span>
+                        </div>
+                    </div>
+                    <div class="server-controls">
+                        <button id="clear-flat-server-log" class="btn small">🗑️ Clear Flat</button>
+                    </div>
+                    <div class="server-log-container">
+                        <div id="flat-server-log-content"></div>
+                    </div>
                 </div>
-                <div class="stat-item">
-                    <span class="label">Alert Messages:</span>
-                    <span id="server-alert-count" class="value">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="label">Last Message:</span>
-                    <span id="server-last-msg" class="value">None</span>
+
+                <!-- Federation Architecture Console -->
+                <div class="server-section" id="federation-server-section">
+                    <h3>🏗️ Federation Architecture Messages</h3>
+                    <div class="server-stats">
+                        <div class="stat-item">
+                            <span class="label">Gateway Messages:</span>
+                            <span id="fed-server-msg-count" class="value">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="label">Alert Messages:</span>
+                            <span id="fed-server-alert-count" class="value">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="label">Last Message:</span>
+                            <span id="fed-server-last-msg" class="value">None</span>
+                        </div>
+                    </div>
+                    <div class="server-controls">
+                        <button id="clear-fed-server-log" class="btn small">🗑️ Clear Federation</button>
+                    </div>
+                    <div class="server-log-container">
+                        <div id="fed-server-log-content"></div>
+                    </div>
                 </div>
             </div>
-            <div class="server-controls">
-                <button id="clear-server-log" class="btn small">🗑️ Clear</button>
+
+            <div class="server-global-controls">
+                <button id="clear-all-server-logs" class="btn small">🗑️ Clear All</button>
+                <button id="test-flat-message" class="btn small">📤 Test Flat</button>
+                <button id="test-fed-message" class="btn small">📤 Test Fed</button>
                 <input type="checkbox" id="server-auto-scroll" checked>
                 <label for="server-auto-scroll">Auto-scroll</label>
-            </div>
-            <div id="server-log-container">
-                <div id="server-log-content"></div>
             </div>
         </section>
 
