@@ -761,6 +761,71 @@ class FederationSimulation extends FloodWatchSimulation {
     });
   }
 
+  // Override processActiveFloods to include gateways
+  processActiveFloods() {
+    // Call parent method to handle sensors
+    const affectedNodes = super.processActiveFloods();
+
+    // Additionally process floods for gateways
+    const now = Date.now();
+
+    for (const [floodId, flood] of this.activeFloods.entries()) {
+      const elapsedTime = now - flood.startTime;
+      const buildupTime = flood.duration * 0.3; // 30% of time to reach max level
+
+      let progress, currentWaterLevel;
+
+      if (elapsedTime <= buildupTime) {
+        // Rising phase - water level increases to maximum
+        progress = elapsedTime / buildupTime;
+        currentWaterLevel = flood.maxWaterLevel * progress;
+      } else if (elapsedTime <= flood.duration) {
+        // Sustain phase - water level stays at maximum
+        progress = 1.0;
+        currentWaterLevel = flood.maxWaterLevel;
+      } else {
+        // Flood duration exceeded - start cleanup
+        progress = 1.0;
+        currentWaterLevel = flood.maxWaterLevel * Math.max(0, 1 - ((elapsedTime - flood.duration) / (flood.duration * 0.2)));
+      }
+
+      // Apply flood to affected gateways
+      for (const gateway of this.gateways) {
+        const distance = Math.sqrt(
+          Math.pow(gateway.location.x - flood.epicenter.x, 2) +
+          Math.pow(gateway.location.y - flood.epicenter.y, 2)
+        );
+
+        if (distance <= flood.radius) {
+          // Give full water level at epicenter, reducing to 50% at edge of radius
+          const distanceRatio = distance / flood.radius;
+          const adjustedWaterLevel = flood.currentWaterLevel * (1 - (distanceRatio * 0.5));
+          if (adjustedWaterLevel > 0) {
+            gateway.updateWaterLevel(adjustedWaterLevel);
+          }
+        } else {
+          // Gateway outside flood radius - reset to normal
+          gateway.updateWaterLevel(0);
+        }
+      }
+
+      // If flood has receded, reset all gateway water levels
+      if (elapsedTime > flood.duration * 1.2 && currentWaterLevel <= 0) {
+        for (const gateway of this.gateways) {
+          const distance = Math.sqrt(
+            Math.pow(gateway.location.x - flood.epicenter.x, 2) +
+            Math.pow(gateway.location.y - flood.epicenter.y, 2)
+          );
+          if (distance <= flood.radius) {
+            gateway.updateWaterLevel(0);
+          }
+        }
+      }
+    }
+
+    return affectedNodes;
+  }
+
   // Override stop method
   stop() {
     super.stop();

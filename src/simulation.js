@@ -72,6 +72,7 @@ class FloodWatchSimulation {
     for (let i = 0; i < totalNodes; i++) {
       const pos = positions[i];
       const sensor = new SensorAgent(`SENSOR-${i}`, pos.x, pos.y, this.config.communicationRange, this.config.maxNeighbors);
+      sensor.simulation = this; // Provide simulation reference for multi-hop routing
       this.sensors.push(sensor);
       this.grid[pos.x][pos.y] = sensor;
     }
@@ -81,6 +82,9 @@ class FloodWatchSimulation {
 
     // Initialize round-robin scheduling
     this.initializeRoundRobinScheduling();
+
+    // Initialize central server connectivity
+    this.updateCentralServerConnectivity();
 
     this.log('Network initialized', {
       sensors: totalNodes,
@@ -181,6 +185,54 @@ class FloodWatchSimulation {
     });
   }
 
+  // Get agent by ID for multi-hop routing
+  getAgentById(agentId) {
+    return this.sensors.find(sensor => sensor.id === agentId);
+  }
+
+  // Update central server connectivity based on network conditions
+  updateCentralServerConnectivity() {
+    for (const sensor of this.sensors) {
+      // Simulate central server connectivity based on various factors
+      sensor.centralServerConnectivity = this.calculateCentralServerConnectivity(sensor);
+    }
+  }
+
+  calculateCentralServerConnectivity(sensor) {
+    if (!sensor.isActive) return false;
+
+    // Factors affecting central server connectivity:
+    // 1. Flood level (higher flood = less connectivity)
+    // 2. Battery level (low battery = less connectivity)
+    // 3. Random network conditions
+
+    let connectivityProbability = 1.0;
+
+    // Flood impact on central server connectivity
+    if (sensor.waterLevel > 1.5) {
+      connectivityProbability *= 0.1; // 10% chance with major flooding
+    } else if (sensor.waterLevel > 1.0) {
+      connectivityProbability *= 0.4; // 40% chance with moderate flooding
+    } else if (sensor.waterLevel > 0.5) {
+      connectivityProbability *= 0.7; // 70% chance with early flooding
+    }
+
+    // Battery level impact
+    if (sensor.batteryLevel < 0.2) {
+      connectivityProbability *= 0.3; // 30% chance with very low battery
+    } else if (sensor.batteryLevel < 0.5) {
+      connectivityProbability *= 0.8; // 80% chance with low battery
+    }
+
+    // Apply general connectivity reliability
+    connectivityProbability *= sensor.connectivityReliability;
+
+    // Random network conditions (simulate infrastructure issues)
+    connectivityProbability *= (0.85 + Math.random() * 0.15); // 85-100% base reliability
+
+    return Math.random() < connectivityProbability;
+  }
+
   start() {
     if (this.isRunning) return;
 
@@ -223,6 +275,11 @@ class FloodWatchSimulation {
 
     // Process active floods
     this.processActiveFloods();
+
+    // Update central server connectivity periodically
+    if (this.currentTick % 5 === 0) { // Every 5 ticks
+      this.updateCentralServerConnectivity();
+    }
 
     // Update metrics
     this.updateMetrics();
@@ -379,7 +436,9 @@ class FloodWatchSimulation {
       sender: sender.id,
       timestamp: Date.now(),
       location: sender.location,
-      architecture: architecture
+      architecture: architecture,
+      hopCount: message.hopCount || 0,
+      route: message.route || [sender.id]
     };
 
     this.centralServer.messagesReceived.push(serverMessage);
@@ -401,7 +460,10 @@ class FloodWatchSimulation {
       location: sender.location,
       data: message.data || message,
       timestamp: Date.now(),
-      architecture: architecture
+      architecture: architecture,
+      hopCount: message.hopCount || 0,
+      route: message.route || [sender.id],
+      isMultiHop: (message.hopCount || 0) > 0
     };
 
     // Add federation-specific information

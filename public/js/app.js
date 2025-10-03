@@ -605,10 +605,16 @@ class FloodWatchApp {
             architectureInfo = data.isGateway ? ' [Gateway]' : ` [via ${data.routedThrough}]`;
         }
 
+        // Add hop information for multi-hop messages
+        let hopInfo = '';
+        if (data.isMultiHop && data.hopCount > 0) {
+            hopInfo = ` <span class="hop-info">[${data.hopCount} hops]</span>`;
+        }
+
         logEntry.innerHTML = `
             <span class="server-timestamp">[${timestamp}]</span>
             <span class="server-msg-type">${data.type}</span>
-            <span class="server-sender">from ${data.sender}${architectureInfo}</span>
+            <span class="server-sender">from ${data.sender}${architectureInfo}${hopInfo}</span>
             <span class="server-location">@(${data.location.x}, ${data.location.y})</span>
             ${messageDetails ? `<span class="server-details">${messageDetails}</span>` : ''}
         `;

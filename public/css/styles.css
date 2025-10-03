@@ -405,9 +405,19 @@ main {
 }
 
 /* Incidents */
+#incidents-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+#incidents-panel h2 {
+    flex-shrink: 0;
+}
+
 #incidents-list {
-    max-height: 300px;
+    flex: 1;
     overflow-y: auto;
+    min-height: 0;
 }
 
 .incident-item {
@@ -755,6 +765,16 @@ footer {
     background: rgba(253, 126, 20, 0.3);
     padding: 0.1rem 0.3rem;
     border-radius: 3px;
+}
+
+.hop-info {
+    color: #f39c12;
+    font-size: 0.75rem;
+    font-weight: bold;
+    background: rgba(243, 156, 18, 0.2);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    margin-left: 0.2rem;
 }
 
 /* Dual Server Console Styles */

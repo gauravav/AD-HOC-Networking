@@ -5,10 +5,13 @@ class GatewayAgent {
     this.id = id;
     this.location = { x, y };
     this.communicationRange = communicationRange; // Larger range than sensors
+    this.originalCommunicationRange = communicationRange; // Store original range
     this.maxSensors = maxSensors; // Max sensors this gateway can handle
     this.batteryLevel = 1.0; // Gateways have better power
     this.isActive = true;
     this.isGateway = true;
+    this.waterLevel = 0; // Track flood water level at gateway location
+    this.connectivityReliability = 1.0; // 100% connectivity reliability initially
 
     // Connected sensors
     this.connectedSensors = new Set();
@@ -53,6 +56,75 @@ class GatewayAgent {
     }
   }
 
+  updateFloodConnectivity(level) {
+    // Progressive connectivity degradation based on realistic flood water levels
+    // Measured in meters - based on real-world flood severity standards
+
+    if (level >= 2.5) {
+      // Complete gateway failure at 2.5+ meters - catastrophic flooding
+      if (this.isActive) {
+        this.fail();
+        this.log(`Gateway ${this.id} failed due to catastrophic flood level: ${level.toFixed(1)}m`);
+        return;
+      }
+    } else if (level >= 1.5) {
+      // Major flooding: 1.5-2.5m - severe equipment damage
+      this.connectivityReliability = 0.2; // 20% reliability
+      this.communicationRange *= 0.4; // 40% range
+      if (Math.random() < 0.6) { // 60% chance of failure
+        this.fail();
+        this.log(`Gateway ${this.id} failed due to major flood level: ${level.toFixed(1)}m`);
+        return;
+      }
+    } else if (level >= 1.0) {
+      // Moderate flooding: 1.0-1.5m - significant equipment stress
+      this.connectivityReliability = 0.5; // 50% reliability
+      this.communicationRange *= 0.6; // 60% range
+      if (Math.random() < 0.3) { // 30% chance of failure
+        this.fail();
+        this.log(`Gateway ${this.id} failed due to moderate flood level: ${level.toFixed(1)}m`);
+        return;
+      }
+    } else if (level >= 0.5) {
+      // Early flooding: 0.5-1.0m - minor equipment impact
+      this.connectivityReliability = 0.8; // 80% reliability
+      this.communicationRange *= 0.8; // 80% range
+      if (Math.random() < 0.1) { // 10% chance of failure
+        this.fail();
+        this.log(`Gateway ${this.id} failed due to early flood level: ${level.toFixed(1)}m`);
+        return;
+      }
+    } else if (level >= 0.2) {
+      // Light water exposure: 0.2-0.5m - minimal impact
+      this.connectivityReliability = 0.95; // 95% reliability
+      this.communicationRange *= 0.95; // 95% range
+    } else {
+      // Normal operation - restore full connectivity if water recedes
+      this.connectivityReliability = 1.0; // 100% reliability
+      this.communicationRange = this.originalCommunicationRange || this.communicationRange;
+    }
+  }
+
+  updateWaterLevel(level) {
+    this.waterLevel = level;
+
+    // Check for flood-based connectivity degradation and failure
+    this.updateFloodConnectivity(level);
+  }
+
+  log(message) {
+    console.log(`[GATEWAY ${this.id}] ${message}`);
+  }
+
+  // Simulate hardware failure
+  fail() {
+    this.isActive = false;
+    this.stop();
+    // Disconnect all sensors when gateway fails
+    this.connectedSensors.clear();
+    this.sensorData.clear();
+  }
+
   // Register a sensor with this gateway
   registerSensor(sensor) {
     if (this.connectedSensors.size < this.maxSensors) {
@@ -80,6 +152,13 @@ class GatewayAgent {
 
     // Prevent processing same message twice
     if (this.receivedMessages.has(message.id)) return;
+
+    // Apply connectivity reliability due to flood conditions
+    if (Math.random() > this.connectivityReliability) {
+      // Message lost due to flood-related connectivity issues
+      return;
+    }
+
     this.receivedMessages.add(message.id);
 
     // Update sender info if it's a connected sensor
@@ -192,6 +271,9 @@ class GatewayAgent {
       connectedSensors: this.connectedSensors.size,
       messagesForwarded: this.messagesForwarded,
       batteryLevel: this.batteryLevel,
+      waterLevel: this.waterLevel,
+      connectivityReliability: this.connectivityReliability,
+      communicationRange: this.communicationRange,
       averageWaterLevel: this.getAverageWaterLevel(),
       hasFlooding: this.hasFloodingAlert()
     };
