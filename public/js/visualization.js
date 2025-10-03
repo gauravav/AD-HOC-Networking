@@ -2,8 +2,8 @@ class GridVisualization {
     constructor(canvasId) {
         this.canvas = document.getElementById(canvasId);
         this.ctx = this.canvas.getContext('2d');
-        this.gridWidth = 100; // 100 meters
-        this.gridHeight = 50; // 50 meters
+        this.gridWidth = 25; // 25 meters
+        this.gridHeight = 25; // 25 meters
         this.cellSize = 8; // Smaller cells for larger grid
         this.zoom = 1;
         this.offsetX = 0;
@@ -144,10 +144,7 @@ class GridVisualization {
             this.drawNodes();
         }
 
-        // Draw connections if zoomed in enough
-        if (this.zoom > 2 && this.gridData) {
-            this.drawConnections();
-        }
+        // Connection lines removed for cleaner visualization
     }
 
     drawBackgroundGrid() {
@@ -283,7 +280,7 @@ class GridVisualization {
         this.ctx.lineWidth = 1;
 
         const cellSize = this.cellSize * this.zoom;
-        const commRange = 5; // 5-meter communication range for all nodes
+        const commRange = 10; // 10-meter communication range for all nodes (updated default)
 
         for (let x = 0; x < this.gridWidth; x++) {
             for (let y = 0; y < this.gridHeight; y++) {
@@ -442,6 +439,41 @@ class GridVisualization {
         if (window.onGridClick) {
             window.onGridClick(x, y);
         }
+    }
+
+    addFloodArea(x, y, radius, intensity, duration = 30000) {
+        const floodId = `${x}-${y}`;
+        this.floodAreas.push({ x, y, radius, intensity, timestamp: Date.now(), id: floodId, duration });
+
+        // Remove flood area after specified duration + 20% recede time
+        const totalDuration = duration * 1.2;
+        setTimeout(() => {
+            this.removeFloodArea(floodId);
+        }, totalDuration);
+
+        this.draw();
+    }
+
+    removeFloodArea(floodId) {
+        this.floodAreas = this.floodAreas.filter(flood => flood.id !== floodId);
+        this.draw();
+    }
+
+    updateFloodArea(x, y, radius, intensity) {
+        // Find existing flood area at this location
+        const floodId = `${x}-${y}`;
+        const existingFlood = this.floodAreas.find(flood => flood.id === floodId);
+
+        if (existingFlood) {
+            // Update intensity
+            existingFlood.intensity = intensity;
+        } else {
+            // Create new flood area if it doesn't exist
+            this.addFloodArea(x, y, radius, intensity);
+            return;
+        }
+
+        this.draw();
     }
 }
 

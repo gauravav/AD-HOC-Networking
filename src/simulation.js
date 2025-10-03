@@ -5,10 +5,10 @@ const { MessageTypes } = require('./messages');
 class FloodWatchSimulation {
   constructor(config = {}, io = null) {
     this.config = {
-      gridWidth: config.gridWidth || 100, // 100 meters
-      gridHeight: config.gridHeight || 50, // 50 meters
-      sensorCount: config.sensorCount || 100,
-      communicationRange: config.communicationRange || 5, // meters
+      gridWidth: config.gridWidth || 25, // 25 meters
+      gridHeight: config.gridHeight || 25, // 25 meters
+      sensorCount: config.sensorCount || 20,
+      communicationRange: config.communicationRange || 10, // meters
       maxNeighbors: config.maxNeighbors || 5, // max neighbors per node
       enableRandomFloods: config.enableRandomFloods !== undefined ? config.enableRandomFloods : true, // enable random floods
       simulationSpeed: config.simulationSpeed || 1000, // ms per tick
@@ -41,6 +41,22 @@ class FloodWatchSimulation {
       nodeFailures: 0
     };
 
+    // Active floods tracking
+    this.activeFloods = new Map();
+
+    // Round-robin communication scheduling
+    this.roundRobinScheduler = {
+      flatArchitecture: {
+        currentSensorIndex: 0,
+        sensorOrder: []
+      },
+      federationArchitecture: {
+        currentSectorIndex: 0,
+        sectorOrder: [],
+        sectors: new Map() // sectorId -> [sensors]
+      }
+    };
+
     this.simulationLog = [];
     this.initializeNetwork();
   }
@@ -56,12 +72,19 @@ class FloodWatchSimulation {
     for (let i = 0; i < totalNodes; i++) {
       const pos = positions[i];
       const sensor = new SensorAgent(`SENSOR-${i}`, pos.x, pos.y, this.config.communicationRange, this.config.maxNeighbors);
+      sensor.simulation = this; // Provide simulation reference for multi-hop routing
       this.sensors.push(sensor);
       this.grid[pos.x][pos.y] = sensor;
     }
 
     // Initialize neighbor discovery
     this.discoverNeighbors();
+
+    // Initialize round-robin scheduling
+    this.initializeRoundRobinScheduling();
+
+    // Initialize central server connectivity
+    this.updateCentralServerConnectivity();
 
     this.log('Network initialized', {
       sensors: totalNodes,
@@ -125,6 +148,91 @@ class FloodWatchSimulation {
     }
   }
 
+  initializeRoundRobinScheduling() {
+    // Set up flat architecture round-robin
+    this.roundRobinScheduler.flatArchitecture.sensorOrder = [...this.sensors];
+
+    // Set up federation architecture sectors (divide grid into 4 sectors)
+    const sectorsPerRow = 2;
+    const sectorsPerCol = 2;
+    const sectorWidth = Math.ceil(this.config.gridWidth / sectorsPerRow);
+    const sectorHeight = Math.ceil(this.config.gridHeight / sectorsPerCol);
+
+    // Initialize sectors
+    for (let sectorRow = 0; sectorRow < sectorsPerCol; sectorRow++) {
+      for (let sectorCol = 0; sectorCol < sectorsPerRow; sectorCol++) {
+        const sectorId = `SECTOR-${sectorRow}-${sectorCol}`;
+        this.roundRobinScheduler.federationArchitecture.sectors.set(sectorId, []);
+        this.roundRobinScheduler.federationArchitecture.sectorOrder.push(sectorId);
+      }
+    }
+
+    // Assign sensors to sectors
+    for (const sensor of this.sensors) {
+      const sectorRow = Math.floor(sensor.location.y / sectorHeight);
+      const sectorCol = Math.floor(sensor.location.x / sectorWidth);
+      const sectorId = `SECTOR-${sectorRow}-${sectorCol}`;
+
+      if (this.roundRobinScheduler.federationArchitecture.sectors.has(sectorId)) {
+        this.roundRobinScheduler.federationArchitecture.sectors.get(sectorId).push(sensor);
+        sensor.federationSector = sectorId;
+      }
+    }
+
+    this.log('Round-robin scheduling initialized', {
+      flatSensors: this.roundRobinScheduler.flatArchitecture.sensorOrder.length,
+      federationSectors: this.roundRobinScheduler.federationArchitecture.sectorOrder.length
+    });
+  }
+
+  // Get agent by ID for multi-hop routing
+  getAgentById(agentId) {
+    return this.sensors.find(sensor => sensor.id === agentId);
+  }
+
+  // Update central server connectivity based on network conditions
+  updateCentralServerConnectivity() {
+    for (const sensor of this.sensors) {
+      // Simulate central server connectivity based on various factors
+      sensor.centralServerConnectivity = this.calculateCentralServerConnectivity(sensor);
+    }
+  }
+
+  calculateCentralServerConnectivity(sensor) {
+    if (!sensor.isActive) return false;
+
+    // Factors affecting central server connectivity:
+    // 1. Flood level (higher flood = less connectivity)
+    // 2. Battery level (low battery = less connectivity)
+    // 3. Random network conditions
+
+    let connectivityProbability = 1.0;
+
+    // Flood impact on central server connectivity
+    if (sensor.waterLevel > 1.5) {
+      connectivityProbability *= 0.1; // 10% chance with major flooding
+    } else if (sensor.waterLevel > 1.0) {
+      connectivityProbability *= 0.4; // 40% chance with moderate flooding
+    } else if (sensor.waterLevel > 0.5) {
+      connectivityProbability *= 0.7; // 70% chance with early flooding
+    }
+
+    // Battery level impact
+    if (sensor.batteryLevel < 0.2) {
+      connectivityProbability *= 0.3; // 30% chance with very low battery
+    } else if (sensor.batteryLevel < 0.5) {
+      connectivityProbability *= 0.8; // 80% chance with low battery
+    }
+
+    // Apply general connectivity reliability
+    connectivityProbability *= sensor.connectivityReliability;
+
+    // Random network conditions (simulate infrastructure issues)
+    connectivityProbability *= (0.85 + Math.random() * 0.15); // 85-100% base reliability
+
+    return Math.random() < connectivityProbability;
+  }
+
   start() {
     if (this.isRunning) return;
 
@@ -156,25 +264,106 @@ class FloodWatchSimulation {
   tick() {
     this.currentTick++;
 
+    // Process round-robin communication first
+    this.processRoundRobinCommunication();
+
     // Process messages between agents
     this.processMessagePropagation();
 
     // Process coordination (incident management)
     this.processIncidentCoordination();
 
+    // Process active floods
+    this.processActiveFloods();
+
+    // Update central server connectivity periodically
+    if (this.currentTick % 5 === 0) { // Every 5 ticks
+      this.updateCentralServerConnectivity();
+    }
+
     // Update metrics
     this.updateMetrics();
 
-    // Random flood events (only if enabled)
-    if (this.config.enableRandomFloods && Math.random() < 0.02) { // 2% chance per tick
-      this.log('🌊 Auto flood event triggered randomly', { type: 'AUTO_FLOOD' });
-      this.triggerRandomFlood();
-    }
+    // Random flood events removed - only manual floods allowed
 
     // Emit status update
     if (this.currentTick % 10 === 0) { // Every 10 ticks
       this.emitStatusUpdate();
     }
+  }
+
+  processRoundRobinCommunication() {
+    // Each tick (second), one sensor sends data in round-robin fashion
+
+    // Flat Architecture: Each sensor sends data to central server in turn
+    this.processRoundRobinFlat();
+
+    // Federation Architecture: Each sector's sensors send data to their gateway in turn
+    this.processRoundRobinFederation();
+  }
+
+  processRoundRobinFlat() {
+    const scheduler = this.roundRobinScheduler.flatArchitecture;
+
+    if (scheduler.sensorOrder.length === 0) return;
+
+    // Get the current sensor in the round-robin sequence
+    const currentSensor = scheduler.sensorOrder[scheduler.currentSensorIndex];
+
+    // Only send if sensor is active
+    if (currentSensor && currentSensor.isActive) {
+      // Create a scheduled data message (HELLO with current status)
+      const dataMessage = currentSensor.createScheduledDataMessage();
+
+      // Send directly to central server for flat architecture
+      this.deliverToCentralServer(dataMessage, currentSensor, 'flat');
+
+      this.log(`🔄 [FLAT] Sensor ${currentSensor.id} sent scheduled data (round-robin)`, {
+        sensor: currentSensor.id,
+        position: scheduler.currentSensorIndex + 1,
+        total: scheduler.sensorOrder.length,
+        architecture: 'flat'
+      });
+    }
+
+    // Move to next sensor in the sequence
+    scheduler.currentSensorIndex = (scheduler.currentSensorIndex + 1) % scheduler.sensorOrder.length;
+  }
+
+  processRoundRobinFederation() {
+    const scheduler = this.roundRobinScheduler.federationArchitecture;
+
+    if (scheduler.sectorOrder.length === 0) return;
+
+    // Get the current sector in the round-robin sequence
+    const currentSectorId = scheduler.sectorOrder[scheduler.currentSectorIndex];
+    const sectorSensors = scheduler.sectors.get(currentSectorId) || [];
+
+    // Find an active sensor in this sector to send data
+    const activeSensors = sectorSensors.filter(sensor => sensor.isActive);
+
+    if (activeSensors.length > 0) {
+      // Rotate through sensors in this sector
+      const sensorIndex = this.currentTick % activeSensors.length;
+      const currentSensor = activeSensors[sensorIndex];
+
+      // Create a scheduled data message
+      const dataMessage = currentSensor.createScheduledDataMessage();
+
+      // Send to gateway (simulated as central server with federation flag)
+      this.deliverToCentralServer(dataMessage, currentSensor, 'federation');
+
+      this.log(`🔄 [FED] Sensor ${currentSensor.id} from ${currentSectorId} sent scheduled data (round-robin)`, {
+        sensor: currentSensor.id,
+        sector: currentSectorId,
+        sectorPosition: scheduler.currentSectorIndex + 1,
+        totalSectors: scheduler.sectorOrder.length,
+        architecture: 'federation'
+      });
+    }
+
+    // Move to next sector in the sequence
+    scheduler.currentSectorIndex = (scheduler.currentSectorIndex + 1) % scheduler.sectorOrder.length;
   }
 
   processMessagePropagation() {
@@ -240,13 +429,16 @@ class FloodWatchSimulation {
     this.metrics.messagesDelivered += deliveredCount;
   }
 
-  deliverToCentralServer(message, sender) {
+  deliverToCentralServer(message, sender, architecture = 'flat') {
     // Central server receives all messages (100% delivery)
     const serverMessage = {
       message,
       sender: sender.id,
       timestamp: Date.now(),
-      location: sender.location
+      location: sender.location,
+      architecture: architecture,
+      hopCount: message.hopCount || 0,
+      route: message.route || [sender.id]
     };
 
     this.centralServer.messagesReceived.push(serverMessage);
@@ -261,19 +453,30 @@ class FloodWatchSimulation {
       }
     }
 
-    // Emit central server message for UI
-    this.emit('central-server-message', {
+    // Add architecture-specific metadata for UI
+    const uiMessage = {
       type: message.type,
       sender: sender.id,
       location: sender.location,
       data: message.data || message,
-      timestamp: Date.now()
-    });
+      timestamp: Date.now(),
+      architecture: architecture,
+      hopCount: message.hopCount || 0,
+      route: message.route || [sender.id],
+      isMultiHop: (message.hopCount || 0) > 0
+    };
 
-    // Track node activity for failure detection
-    if (message.type === MessageTypes.HELLO) {
-      this.coordinationAgent.recordNodeActivity(sender.id);
+    // Add federation-specific information
+    if (architecture === 'federation' && sender.federationSector) {
+      uiMessage.isGateway = false;
+      uiMessage.routedThrough = `GATEWAY-${sender.federationSector}`;
+      uiMessage.sector = sender.federationSector;
     }
+
+    // Emit central server message for UI
+    this.emit('central-server-message', uiMessage);
+
+    // Node activity tracking disabled
 
     // Enhanced logging for HELLO messages with neighbor data
     if (message.type === MessageTypes.HELLO && message.data.neighbors) {
@@ -301,40 +504,12 @@ class FloodWatchSimulation {
 
 
   processIncidentCoordination() {
-    // Run failure detection
-    const detectedFailures = this.coordinationAgent.detectNodeFailures(this.sensors);
-
-    // Log newly detected failures
-    if (detectedFailures.length > 0) {
-      const newFailures = detectedFailures.filter(failure =>
-        Date.now() - failure.detectedAt < 10000 // Within last 10 seconds
-      );
-
-      newFailures.forEach(failure => {
-        this.log(`🔍 Node failure detected: ${failure.nodeId} | Method: ${failure.confirmationMethod} | Evidence: ${failure.evidenceSources.length} sources`, {
-          nodeId: failure.nodeId,
-          confirmationMethod: failure.confirmationMethod,
-          evidenceSources: failure.evidenceSources,
-          type: 'FAILURE_DETECTION'
-        });
-      });
-    }
-
-    this.coordinationAgent.clearOldFailures();
+    // Node failure detection disabled - focus on flood alerts only
 
     // Let coordination agent generate reports
     const report = this.coordinationAgent.generateIncidentReports();
     if (report) {
       this.emit('incident-report', report);
-    }
-
-    // Send node failure reports
-    const nodeFailures = this.coordinationAgent.getNodeFailures();
-    if (nodeFailures.length > 0) {
-      this.emit('node-failure-report', {
-        timestamp: Date.now(),
-        failures: nodeFailures
-      });
     }
   }
 
@@ -384,12 +559,132 @@ class FloodWatchSimulation {
 
 
 
-  triggerRandomFlood() {
-    const x = Math.floor(Math.random() * this.config.gridWidth);
-    const y = Math.floor(Math.random() * this.config.gridHeight);
-    const waterLevel = 1.5 + Math.random() * 2; // 1.5 to 3.5 meters
+  triggerGradualFlood(x, y, maxWaterLevel, durationSeconds) {
+    const floodId = `FLOOD-${Date.now()}`;
+    const flood = {
+      id: floodId,
+      epicenter: { x, y },
+      maxWaterLevel: maxWaterLevel,
+      currentWaterLevel: 0,
+      duration: durationSeconds * 1000, // Convert to milliseconds
+      startTime: Date.now(),
+      ticksPerSecond: 1000 / this.config.simulationSpeed,
+      radius: 5 // 5-unit radius
+    };
 
-    this.triggerFlood(x, y, waterLevel);
+    this.activeFloods.set(floodId, flood);
+
+    this.log(`🌊 GRADUAL FLOOD STARTED at (${x}, ${y}) - will reach ${maxWaterLevel.toFixed(1)}m over ${durationSeconds}s`, {
+      epicenter: { x, y },
+      maxWaterLevel,
+      duration: durationSeconds,
+      type: 'GRADUAL_FLOOD_START'
+    });
+
+    this.emit('flood-event', {
+      epicenter: { x, y },
+      waterLevel: 0,
+      maxWaterLevel: maxWaterLevel,
+      duration: durationSeconds,
+      type: 'gradual',
+      affectedNodes: []
+    });
+  }
+
+  processActiveFloods() {
+    const now = Date.now();
+    const affectedNodes = [];
+
+    for (const [floodId, flood] of this.activeFloods.entries()) {
+      const elapsedTime = now - flood.startTime;
+      const buildupTime = flood.duration * 0.3; // 30% of time to reach max level
+
+      let progress, currentWaterLevel;
+
+      if (elapsedTime <= buildupTime) {
+        // Rising phase - water level increases to maximum
+        progress = elapsedTime / buildupTime;
+        currentWaterLevel = flood.maxWaterLevel * progress;
+      } else if (elapsedTime <= flood.duration) {
+        // Sustain phase - water level stays at maximum
+        progress = 1.0;
+        currentWaterLevel = flood.maxWaterLevel;
+      } else {
+        // Flood duration exceeded - start cleanup
+        progress = 1.0;
+        currentWaterLevel = flood.maxWaterLevel * Math.max(0, 1 - ((elapsedTime - flood.duration) / (flood.duration * 0.2)));
+      }
+
+      flood.currentWaterLevel = currentWaterLevel;
+
+      // Apply flood to affected nodes
+      const floodAffectedNodes = [];
+      for (const node of this.sensors) {
+        const distance = Math.sqrt(
+          Math.pow(node.location.x - flood.epicenter.x, 2) +
+          Math.pow(node.location.y - flood.epicenter.y, 2)
+        );
+
+        if (distance <= flood.radius) {
+          // Give full water level at epicenter, reducing to 50% at edge of radius
+          const distanceRatio = distance / flood.radius;
+          const adjustedWaterLevel = flood.currentWaterLevel * (1 - (distanceRatio * 0.5));
+          if (adjustedWaterLevel > 0) {
+            node.updateWaterLevel(adjustedWaterLevel);
+            floodAffectedNodes.push({
+              nodeId: node.id,
+              waterLevel: adjustedWaterLevel,
+              location: node.location
+            });
+          }
+        }
+      }
+
+      // Update flood visualization
+      if (this.currentTick % 5 === 0) { // Update every 5 ticks to reduce spam
+        this.emit('flood-update', {
+          floodId: floodId,
+          epicenter: flood.epicenter,
+          currentWaterLevel: flood.currentWaterLevel,
+          maxWaterLevel: flood.maxWaterLevel,
+          progress: progress,
+          affectedNodes: floodAffectedNodes
+        });
+      }
+
+      affectedNodes.push(...floodAffectedNodes);
+
+      // Remove floods that have completely receded
+      if (elapsedTime > flood.duration * 1.2 && currentWaterLevel <= 0) {
+        this.log(`🌊 GRADUAL FLOOD RECEDED at (${flood.epicenter.x}, ${flood.epicenter.y}) - lasted ${Math.round(elapsedTime / 1000)}s`, {
+          epicenter: flood.epicenter,
+          finalWaterLevel: 0,
+          type: 'GRADUAL_FLOOD_RECEDED'
+        });
+
+        // Emit flood-receded event for frontend
+        this.emit('flood-receded', {
+          floodId: floodId,
+          epicenter: flood.epicenter,
+          duration: Math.round(elapsedTime / 1000)
+        });
+
+        // Set all affected nodes back to 0 water level
+        for (const node of this.sensors) {
+          const distance = Math.sqrt(
+            Math.pow(node.location.x - flood.epicenter.x, 2) +
+            Math.pow(node.location.y - flood.epicenter.y, 2)
+          );
+          if (distance <= flood.radius) {
+            node.updateWaterLevel(0);
+          }
+        }
+
+        this.activeFloods.delete(floodId);
+      }
+    }
+
+    return affectedNodes;
   }
 
   triggerFlood(x, y, waterLevel) {
@@ -402,7 +697,9 @@ class FloodWatchSimulation {
       );
 
       if (distance <= 5) { // 5-unit radius
-        const adjustedWaterLevel = waterLevel * (1 - distance / 10);
+        // Give full water level at epicenter, reducing to 50% at edge of radius
+        const distanceRatio = distance / 5;
+        const adjustedWaterLevel = waterLevel * (1 - (distanceRatio * 0.5));
         if (adjustedWaterLevel > 0) {
           node.updateWaterLevel(adjustedWaterLevel);
           affectedNodes.push({

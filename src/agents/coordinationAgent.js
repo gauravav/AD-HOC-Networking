@@ -13,7 +13,16 @@ class FloodIncident {
   }
 
   addAlert(alert) {
-    this.alerts.push(alert);
+    // Update existing sensor data or add new sensor
+    const existingAlertIndex = this.alerts.findIndex(a => a.senderId === alert.senderId);
+    if (existingAlertIndex !== -1) {
+      // Update existing sensor's latest reading
+      this.alerts[existingAlertIndex] = alert;
+    } else {
+      // Add new sensor to incident
+      this.alerts.push(alert);
+    }
+
     this.affectedSensors.add(alert.senderId);
     this.lastUpdate = Date.now();
     this.updateSeverity();
@@ -27,7 +36,7 @@ class FloodIncident {
       this.severity = 'CRITICAL';
     } else if (maxWaterLevel > 2.0 || sensorCount > 5) {
       this.severity = 'HIGH';
-    } else if (maxWaterLevel > 1.5 || sensorCount > 2) {
+    } else if (maxWaterLevel > 1.0 || sensorCount > 2) {
       this.severity = 'MEDIUM';
     } else {
       this.severity = 'LOW';
@@ -39,6 +48,15 @@ class FloodIncident {
     const avgX = locations.reduce((sum, loc) => sum + loc.x, 0) / locations.length;
     const avgY = locations.reduce((sum, loc) => sum + loc.y, 0) / locations.length;
     return { x: avgX, y: avgY };
+  }
+
+  getCurrentMaxWaterLevel() {
+    return Math.max(...this.alerts.map(a => a.data.waterLevel));
+  }
+
+  hasActiveFlooding(threshold = 1.0) {
+    // Check if any sensor still detects water above threshold
+    return this.alerts.some(alert => alert.data.waterLevel > threshold);
   }
 }
 
@@ -65,7 +83,7 @@ class CoordinationAgent {
     this.cleanupInterval = setInterval(() => {
       this.cleanupIncidents();
       this.cleanupDuplicates();
-    }, 30000); // Every 30 seconds
+    }, 10000); // Every 10 seconds for faster incident cleanup
 
     // Generate incident reports
     this.reportInterval = setInterval(() => {
@@ -124,11 +142,13 @@ class CoordinationAgent {
       return true;
     }
 
-    // Check for near-duplicate alerts (same sensor, similar time)
+    // Allow water level updates from same sensor - don't treat as duplicates
+    // Only treat as duplicate if it's the exact same water level within short time window
     const recentAlerts = Array.from(this.processedAlerts)
       .map(id => this.findAlertById(id))
       .filter(a => a && a.senderId === alert.senderId)
-      .filter(a => Date.now() - a.timestamp < this.duplicateTimeWindow);
+      .filter(a => Date.now() - a.timestamp < 5000) // 5 second window for exact duplicates
+      .filter(a => Math.abs(a.data.waterLevel - alert.data.waterLevel) < 0.1); // Same water level
 
     return recentAlerts.length > 0;
   }
@@ -170,7 +190,7 @@ class CoordinationAgent {
 
     if (waterLevel > 3.0) return 'CRITICAL';
     if (waterLevel > 2.0) return 'HIGH';
-    if (waterLevel > 1.5) return 'MEDIUM';
+    if (waterLevel > 1.0) return 'MEDIUM';
     return 'LOW';
   }
 
@@ -192,14 +212,22 @@ class CoordinationAgent {
     const now = Date.now();
 
     for (const [incidentId, incident] of this.incidents.entries()) {
-      // Auto-resolve old incidents
-      if (now - incident.lastUpdate > this.incidentTimeoutMs) {
-        incident.status = 'RESOLVED';
+      if (incident.status === 'ACTIVE') {
+        // Check if incident should be resolved due to water levels dropping
+        if (!incident.hasActiveFlooding(1.0)) {
+          incident.status = 'RESOLVED';
+          console.log(`Incident ${incidentId} resolved - no active flooding detected`);
+        }
+        // Auto-resolve old incidents that haven't been updated
+        else if (now - incident.lastUpdate > this.incidentTimeoutMs) {
+          incident.status = 'RESOLVED';
+          console.log(`Incident ${incidentId} resolved - timeout`);
+        }
       }
 
       // Remove very old resolved incidents
       if (incident.status === 'RESOLVED' &&
-          now - incident.lastUpdate > this.incidentTimeoutMs * 2) {
+          now - incident.lastUpdate > 30000) { // Remove after 30 seconds instead of 10 minutes
         this.incidents.delete(incidentId);
       }
     }
@@ -231,7 +259,14 @@ class CoordinationAgent {
         location: incident.getAverageLocation(),
         sensorCount: incident.affectedSensors.size,
         duration: Date.now() - incident.createdAt,
-        maxWaterLevel: Math.max(...incident.alerts.map(a => a.data.waterLevel))
+        maxWaterLevel: Math.max(...incident.alerts.map(a => a.data.waterLevel)),
+        affectedSensors: Array.from(incident.affectedSensors),
+        sensorDetails: incident.alerts.map(alert => ({
+          sensorId: alert.senderId,
+          waterLevel: alert.data.waterLevel,
+          location: alert.data.location,
+          lastUpdate: alert.timestamp
+        }))
       })),
       duplicatesRemoved: this.duplicateAlerts.size,
       totalAlertsProcessed: this.processedAlerts.size

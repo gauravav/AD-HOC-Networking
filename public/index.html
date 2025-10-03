@@ -27,10 +27,10 @@
 
                 <div class="control-group">
                     <h3>Parameters</h3>
-                    <label>Grid Width (m): <input type="number" id="grid-width" value="100" min="50" max="200"></label>
-                    <label>Grid Height (m): <input type="number" id="grid-height" value="50" min="30" max="100"></label>
-                    <label>Sensor Count: <input type="number" id="sensor-count" value="100" min="10" max="500"></label>
-                    <label>Communication Range (m): <input type="number" id="comm-range" value="5" min="1" max="20" step="0.5"></label>
+                    <label>Grid Width (m): <input type="number" id="grid-width" value="25" min="10" max="200"></label>
+                    <label>Grid Height (m): <input type="number" id="grid-height" value="25" min="10" max="100"></label>
+                    <label>Sensor Count: <input type="number" id="sensor-count" value="20" min="5" max="500"></label>
+                    <label>Communication Range (m): <input type="number" id="comm-range" value="10" min="1" max="20" step="0.5"></label>
                     <label>Max Neighbors: <input type="number" id="max-neighbors" value="5" min="1" max="20"></label>
                     <label>Speed (ms): <input type="number" id="speed" value="1000" min="100" max="5000" step="100"></label>
                 </div>
@@ -38,21 +38,18 @@
                 <div class="control-group">
                     <h3>Events</h3>
                     <button id="trigger-flood-btn" class="btn warning">🌊 Trigger Flood</button>
-                    <button id="fail-node-btn" class="btn danger">💥 Fail Random Node</button>
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="enable-random-floods" checked>
-                        Enable Random Floods (2% chance per tick)
-                    </label>
                     <p class="info-text">All nodes are uniform sensors with configurable range</p>
                 </div>
             </div>
 
             <div id="flood-controls" class="hidden">
-                <h3>Flood Location</h3>
+                <h3>Flood Parameters</h3>
                 <p>Click on the grid to trigger flood at that location, or use coordinates:</p>
-                <label>X: <input type="number" id="flood-x" value="50" min="0" max="99"></label>
-                <label>Y: <input type="number" id="flood-y" value="25" min="0" max="49"></label>
-                <label>Water Level: <input type="number" id="flood-level" value="2.5" min="1.0" max="5.0" step="0.1"></label>
+                <label>X: <input type="number" id="flood-x" value="12" min="0" max="24"></label>
+                <label>Y: <input type="number" id="flood-y" value="12" min="0" max="24"></label>
+                <label>Max Water Level: <input type="number" id="flood-level" value="2.5" min="1.0" max="5.0" step="0.1"></label>
+                <label>Duration (seconds): <input type="number" id="flood-duration" value="60" min="10" max="300" step="5"></label>
+                <p class="info-text">Water level will gradually increase from 0 to max level over the specified duration</p>
                 <button id="confirm-flood-btn" class="btn warning">Confirm Flood</button>
                 <button id="cancel-flood-btn" class="btn secondary">Cancel</button>
             </div>
@@ -89,37 +86,107 @@
             </div>
         </section>
 
-        <!-- Grid Visualization -->
-        <section id="grid-panel" class="panel">
-            <h2>🗺️ Network Grid</h2>
-            <div class="grid-controls">
-                <button id="zoom-in" class="btn small">🔍+</button>
-                <button id="zoom-out" class="btn small">🔍-</button>
-                <button id="toggle-labels" class="btn small">🏷️ Labels</button>
-                <select id="view-mode">
-                    <option value="status">Node Status</option>
-                    <option value="battery">Battery Level</option>
-                    <option value="water">Water Level</option>
-                    <option value="connectivity">Connectivity</option>
-                </select>
+        <!-- Dual Architecture Visualization -->
+        <section id="dual-grid-panel" class="panel wide-panel">
+            <h2>🗺️ Network Architecture Comparison</h2>
+
+            <!-- Architecture Toggle -->
+            <div class="architecture-toggle">
+                <label>
+                    <input type="radio" name="architecture" value="both" checked>
+                    <span>Both Architectures</span>
+                </label>
+                <label>
+                    <input type="radio" name="architecture" value="flat">
+                    <span>Flat Only</span>
+                </label>
+                <label>
+                    <input type="radio" name="architecture" value="federation">
+                    <span>Federation Only</span>
+                </label>
             </div>
-            <div id="grid-container">
-                <canvas id="grid-canvas"></canvas>
+
+            <div class="dual-grid-container">
+                <!-- Flat Architecture -->
+                <div class="grid-section" id="flat-section">
+                    <h3>📡 Flat Architecture</h3>
+                    <p class="architecture-desc">Direct sensor-to-server communication</p>
+                    <div class="grid-controls">
+                        <button id="flat-zoom-in" class="btn small">🔍+</button>
+                        <button id="flat-zoom-out" class="btn small">🔍-</button>
+                        <button id="flat-toggle-labels" class="btn small">🏷️ Labels</button>
+                        <select id="flat-view-mode">
+                            <option value="status">Node Status</option>
+                            <option value="battery">Battery Level</option>
+                            <option value="water">Water Level</option>
+                            <option value="connectivity">Connectivity</option>
+                            <option value="interconnected">Interconnected Mesh</option>
+                        </select>
+                    </div>
+                    <div class="grid-container">
+                        <canvas id="flat-grid-canvas"></canvas>
+                    </div>
+                    <div class="architecture-stats">
+                        <div class="stat-item">
+                            <span>Direct Routes:</span>
+                            <span id="flat-direct-routes">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>Total Hops:</span>
+                            <span id="flat-total-hops">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Federation Architecture -->
+                <div class="grid-section" id="federation-section">
+                    <h3>🏗️ Federation Architecture</h3>
+                    <p class="architecture-desc">Hierarchical communication through gateways</p>
+                    <div class="grid-controls">
+                        <button id="fed-zoom-in" class="btn small">🔍+</button>
+                        <button id="fed-zoom-out" class="btn small">🔍-</button>
+                        <button id="fed-toggle-labels" class="btn small">🏷️ Labels</button>
+                        <select id="fed-view-mode">
+                            <option value="status">Node Status</option>
+                            <option value="battery">Battery Level</option>
+                            <option value="water">Water Level</option>
+                            <option value="connectivity">Connectivity</option>
+                        </select>
+                    </div>
+                    <div class="grid-container">
+                        <canvas id="federation-grid-canvas"></canvas>
+                    </div>
+                    <div class="architecture-stats">
+                        <div class="stat-item">
+                            <span>Gateways:</span>
+                            <span id="fed-gateway-count">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>Avg Hops:</span>
+                            <span id="fed-avg-hops">0</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div id="grid-legend">
+
+            <div id="shared-legend">
                 <div class="legend-item">
                     <div class="legend-color sensor-active"></div>
                     <span>Active Sensor</span>
                 </div>
                 <div class="legend-item">
+                    <div class="legend-color gateway-node"></div>
+                    <span>Gateway Node</span>
+                </div>
+                <div class="legend-item">
                     <div class="legend-color node-failed"></div>
-                    <span>Inactive Sensor</span>
+                    <span>Inactive Node</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-color flood-area"></div>
                     <span>Flood Area</span>
                 </div>
-                <div class="info-text">Grid: 100m × 50m | Central Server (off-map)</div>
+                <div class="info-text">Grid: 25m × 25m | Central Server (off-map) | Real-time comparison | Interconnected: sensor-to-sensor mesh</div>
             </div>
         </section>
 
@@ -163,30 +230,84 @@
         </section>
 
 
-        <!-- Central Server Console -->
+        <!-- Dual Central Server Console -->
         <section id="central-server-panel" class="panel">
             <h2>💻 Central Server Console</h2>
-            <div class="server-stats">
-                <div class="stat-item">
-                    <span class="label">Messages Received:</span>
-                    <span id="server-msg-count" class="value">0</span>
+
+            <!-- Architecture Toggle -->
+            <div class="server-architecture-toggle">
+                <label>
+                    <input type="radio" name="server-view" value="both" checked>
+                    <span>Both Architectures</span>
+                </label>
+                <label>
+                    <input type="radio" name="server-view" value="flat">
+                    <span>Flat Only</span>
+                </label>
+                <label>
+                    <input type="radio" name="server-view" value="federation">
+                    <span>Federation Only</span>
+                </label>
+            </div>
+
+            <div class="dual-server-container">
+                <!-- Flat Architecture Console -->
+                <div class="server-section" id="flat-server-section">
+                    <h3>📡 Flat Architecture Messages</h3>
+                    <div class="server-stats">
+                        <div class="stat-item">
+                            <span class="label">Direct Messages:</span>
+                            <span id="flat-server-msg-count" class="value">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="label">Alert Messages:</span>
+                            <span id="flat-server-alert-count" class="value">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="label">Last Message:</span>
+                            <span id="flat-server-last-msg" class="value">None</span>
+                        </div>
+                    </div>
+                    <div class="server-controls">
+                        <button id="clear-flat-server-log" class="btn small">🗑️ Clear Flat</button>
+                    </div>
+                    <div class="server-log-container">
+                        <div id="flat-server-log-content"></div>
+                    </div>
                 </div>
-                <div class="stat-item">
-                    <span class="label">Alert Messages:</span>
-                    <span id="server-alert-count" class="value">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="label">Last Message:</span>
-                    <span id="server-last-msg" class="value">None</span>
+
+                <!-- Federation Architecture Console -->
+                <div class="server-section" id="federation-server-section">
+                    <h3>🏗️ Federation Architecture Messages</h3>
+                    <div class="server-stats">
+                        <div class="stat-item">
+                            <span class="label">Gateway Messages:</span>
+                            <span id="fed-server-msg-count" class="value">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="label">Alert Messages:</span>
+                            <span id="fed-server-alert-count" class="value">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="label">Last Message:</span>
+                            <span id="fed-server-last-msg" class="value">None</span>
+                        </div>
+                    </div>
+                    <div class="server-controls">
+                        <button id="clear-fed-server-log" class="btn small">🗑️ Clear Federation</button>
+                    </div>
+                    <div class="server-log-container">
+                        <div id="fed-server-log-content"></div>
+                    </div>
                 </div>
             </div>
-            <div class="server-controls">
-                <button id="clear-server-log" class="btn small">🗑️ Clear</button>
+
+            <div class="server-global-controls">
+                <button id="clear-all-server-logs" class="btn small">🗑️ Clear All</button>
+                <button id="test-flat-message" class="btn small">📤 Test Flat</button>
+                <button id="test-fed-message" class="btn small">📤 Test Fed</button>
                 <input type="checkbox" id="server-auto-scroll" checked>
                 <label for="server-auto-scroll">Auto-scroll</label>
-            </div>
-            <div id="server-log-container">
-                <div id="server-log-content"></div>
             </div>
         </section>
 
@@ -210,6 +331,7 @@
     </footer>
 
     <script src="js/visualization.js"></script>
+    <script src="js/dualVisualization.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
