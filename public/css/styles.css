@@ -747,6 +747,16 @@ footer {
     background: #28a745;
 }
 
+.server-log-entry.recovery-message {
+    background: rgba(46, 204, 113, 0.2);
+    border-left: 3px solid #2ecc71;
+    padding-left: 0.5rem;
+}
+
+.server-log-entry.recovery-message .server-msg-type {
+    background: #2ecc71;
+}
+
 .server-sender {
     color: #ecf0f1;
     font-weight: 600;

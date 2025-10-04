@@ -677,10 +677,16 @@ class FederationSimulation extends FloodWatchSimulation {
   }
 
   calculateFlatMetrics() {
+    // Calculate actual average hops from metrics
+    const totalMessages = this.metrics.messagesDelivered || 1;
+    const averageHops = totalMessages > 0 ? this.metrics.totalHops / totalMessages : 0;
+
     return {
-      averageHops: 1, // Always 1 hop in flat architecture
-      directRoutes: this.sensors.filter(s => s.isActive).length,
-      totalMessages: this.flatMessages ? this.flatMessages.length : 0,
+      averageHops: averageHops,
+      totalHops: this.metrics.totalHops,
+      multiHopMessages: this.metrics.multiHopMessages,
+      directRoutes: this.sensors.filter(s => s.isActive && s.centralServerConnectivity).length,
+      totalMessages: totalMessages,
       averageLatency: 10, // Simulated flat latency
       reliability: this.sensors.filter(s => s.isActive).length / this.sensors.length
     };

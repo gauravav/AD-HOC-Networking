@@ -94,6 +94,15 @@ class SensorAgent {
       // Normal operation - restore full connectivity if water recedes
       this.connectivityReliability = 1.0; // 100% reliability
       this.communicationRange = this.originalCommunicationRange || this.communicationRange;
+
+      // Attempt automatic recovery if node was previously failed due to flooding
+      if (!this.isActive && this.batteryLevel > 0) {
+        // Recovery chance based on how long the water has been low
+        const recoveryChance = 0.8; // 80% chance of successful recovery when water recedes
+        if (Math.random() < recoveryChance) {
+          this.recover();
+        }
+      }
     }
   }
 
@@ -316,6 +325,7 @@ class SensorAgent {
     // Attempt multi-hop routing in flat organization
     if (this.centralServerConnectivity) {
       // Direct delivery to central server
+      this.log(`Direct delivery to central server (connectivity: ${this.centralServerConnectivity})`);
       this.messageBuffer.push({
         message,
         timestamp: Date.now(),
@@ -325,6 +335,7 @@ class SensorAgent {
       });
     } else {
       // Use multi-hop routing through neighbors
+      this.log(`No direct connectivity - attempting multi-hop delivery (neighbors: ${this.neighbors.size})`);
       this.attemptMultiHopDelivery(message);
     }
   }
@@ -539,12 +550,45 @@ class SensorAgent {
     this.stop();
   }
 
-  // Restore from failure
+  // Restore from failure (manual restoration)
   restore() {
     if (this.batteryLevel > 0) {
       this.isActive = true;
       this.startPeriodicTasks();
     }
+  }
+
+  // Automatic recovery from flood damage
+  recover() {
+    if (this.batteryLevel > 0) {
+      this.isActive = true;
+      this.startPeriodicTasks();
+      this.log(`Sensor ${this.id} recovered automatically after flood waters receded`);
+
+      // Reset communication range to original
+      this.communicationRange = this.originalCommunicationRange;
+
+      // Send recovery notification
+      this.broadcastRecoveryNotification();
+    }
+  }
+
+  // Broadcast recovery notification to network
+  broadcastRecoveryNotification() {
+    const recoveryMessage = new HelloMessage(
+      this.id,
+      this.batteryLevel,
+      this.location,
+      this.getNearestNeighbors()
+    );
+
+    // Mark as recovery message
+    recoveryMessage.data.recoveryNotification = true;
+    recoveryMessage.data.recoveredAt = Date.now();
+
+    // Send to central server and neighbors
+    this.deliverToCentralServer(recoveryMessage);
+    this.broadcastMessage(recoveryMessage);
   }
 }
 

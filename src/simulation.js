@@ -36,6 +36,8 @@ class FloodWatchSimulation {
       messagesLost: 0,
       averageDelay: 0,
       networkOverhead: 0,
+      totalHops: 0,
+      multiHopMessages: 0,
       duplicatesRemoved: 0,
       incidentsCreated: 0,
       nodeFailures: 0
@@ -228,7 +230,12 @@ class FloodWatchSimulation {
     connectivityProbability *= sensor.connectivityReliability;
 
     // Random network conditions (simulate infrastructure issues)
-    connectivityProbability *= (0.85 + Math.random() * 0.15); // 85-100% base reliability
+    connectivityProbability *= (0.6 + Math.random() * 0.4); // 60-100% base reliability
+
+    // Introduce some nodes that randomly lose connectivity for testing
+    if (Math.random() < 0.3) { // 30% chance of additional connectivity loss
+      connectivityProbability *= 0.3;
+    }
 
     return Math.random() < connectivityProbability;
   }
@@ -315,8 +322,8 @@ class FloodWatchSimulation {
       // Create a scheduled data message (HELLO with current status)
       const dataMessage = currentSensor.createScheduledDataMessage();
 
-      // Send directly to central server for flat architecture
-      this.deliverToCentralServer(dataMessage, currentSensor, 'flat');
+      // Let the sensor handle delivery (will use multi-hop routing if needed)
+      currentSensor.deliverToCentralServer(dataMessage);
 
       this.log(`🔄 [FLAT] Sensor ${currentSensor.id} sent scheduled data (round-robin)`, {
         sensor: currentSensor.id,
@@ -388,7 +395,9 @@ class FloodWatchSimulation {
           centralServerMessages.push({
             sender: node,
             message: msgData.message,
-            timestamp: msgData.timestamp
+            timestamp: msgData.timestamp,
+            hopCount: msgData.hopCount || 0,
+            route: msgData.route || [node.id]
           });
         }
       }
@@ -401,7 +410,7 @@ class FloodWatchSimulation {
 
     // Send messages to central server
     for (const msgData of centralServerMessages) {
-      this.deliverToCentralServer(msgData.message, msgData.sender);
+      this.deliverToCentralServer(msgData.message, msgData.sender, 'flat', msgData.hopCount, msgData.route);
     }
   }
 
@@ -429,7 +438,7 @@ class FloodWatchSimulation {
     this.metrics.messagesDelivered += deliveredCount;
   }
 
-  deliverToCentralServer(message, sender, architecture = 'flat') {
+  deliverToCentralServer(message, sender, architecture = 'flat', hopCount = 0, route = null) {
     // Central server receives all messages (100% delivery)
     const serverMessage = {
       message,
@@ -437,11 +446,18 @@ class FloodWatchSimulation {
       timestamp: Date.now(),
       location: sender.location,
       architecture: architecture,
-      hopCount: message.hopCount || 0,
-      route: message.route || [sender.id]
+      hopCount: hopCount,
+      route: route || [sender.id],
+      isMultiHop: hopCount > 0
     };
 
     this.centralServer.messagesReceived.push(serverMessage);
+
+    // Update hop count metrics
+    this.metrics.totalHops += hopCount;
+    if (hopCount > 0) {
+      this.metrics.multiHopMessages++;
+    }
 
     // Process alert messages through coordination agent
     if (message.type === MessageTypes.ALERT) {
@@ -479,7 +495,7 @@ class FloodWatchSimulation {
     // Node activity tracking disabled
 
     // Enhanced logging for HELLO messages with neighbor data
-    if (message.type === MessageTypes.HELLO && message.data.neighbors) {
+    if (message.type === MessageTypes.HELLO && message.data && message.data.neighbors) {
       const neighborCount = message.data.neighbors.length;
       const neighborList = message.data.neighbors.map(n =>
         `${n.id}@(${n.location.x},${n.location.y})`

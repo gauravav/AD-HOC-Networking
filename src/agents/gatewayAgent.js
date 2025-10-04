@@ -102,6 +102,15 @@ class GatewayAgent {
       // Normal operation - restore full connectivity if water recedes
       this.connectivityReliability = 1.0; // 100% reliability
       this.communicationRange = this.originalCommunicationRange || this.communicationRange;
+
+      // Attempt automatic recovery if gateway was previously failed due to flooding
+      if (!this.isActive && this.batteryLevel > 0) {
+        // Recovery chance based on how long the water has been low
+        const recoveryChance = 0.8; // 80% chance of successful recovery when water recedes
+        if (Math.random() < recoveryChance) {
+          this.recover();
+        }
+      }
     }
   }
 
@@ -123,6 +132,40 @@ class GatewayAgent {
     // Disconnect all sensors when gateway fails
     this.connectedSensors.clear();
     this.sensorData.clear();
+  }
+
+  // Automatic recovery from flood damage
+  recover() {
+    if (this.batteryLevel > 0) {
+      this.isActive = true;
+      this.startPeriodicTasks();
+      this.log(`Gateway ${this.id} recovered automatically after flood waters receded`);
+
+      // Reset communication range to original
+      this.communicationRange = this.originalCommunicationRange;
+
+      // Send recovery notification
+      this.broadcastRecoveryNotification();
+    }
+  }
+
+  // Broadcast recovery notification to network
+  broadcastRecoveryNotification() {
+    const recoveryMessage = new HelloMessage(
+      this.id,
+      this.batteryLevel,
+      this.location,
+      Array.from(this.connectedSensors),
+      'GATEWAY'
+    );
+
+    // Mark as recovery message
+    recoveryMessage.data.recoveryNotification = true;
+    recoveryMessage.data.recoveredAt = Date.now();
+    recoveryMessage.data.gatewayRecovery = true;
+
+    // Send to central server
+    this.forwardToCentralServer(recoveryMessage, this, 1);
   }
 
   // Register a sensor with this gateway

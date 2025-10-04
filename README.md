@@ -69,7 +69,7 @@ A comprehensive real-time simulation of Ad-Hoc Wireless Sensor Networks for floo
 3. **Emergency Broadcasting**: Immediate alert transmission to central server
 4. **Continuous Reporting**: 10-second interval updates during active flooding
 
-### Network Degradation
+### Network Degradation & Recovery
 As flood waters rise, the system realistically simulates connectivity degradation:
 
 #### Sensor/Gateway Degradation Levels
@@ -78,6 +78,13 @@ As flood waters rise, the system realistically simulates connectivity degradatio
 - **1.0-1.5m (Moderate Flooding)**: 50% reliability, 60% range, 30% failure chance
 - **1.5-2.5m (Major Flooding)**: 20% reliability, 40% range, 60% failure chance
 - **2.5m+ (Catastrophic)**: Complete sensor failure
+
+#### Automatic Recovery
+When flood waters recede below critical levels:
+- **Failed nodes automatically recover**: 80% chance of successful recovery when water drops below 0.2m
+- **Recovery notifications**: System broadcasts recovery messages to network and central server
+- **Full restoration**: Communication range and reliability return to normal levels
+- **Network reformation**: Recovered nodes rejoin the network and reestablish neighbor connections
 
 ### Multi-Hop Routing (Flat Organization)
 When direct connectivity fails:

@@ -345,7 +345,7 @@ class FloodWatchApp {
 
         // Update architecture-specific stats
         document.getElementById('flat-direct-routes').textContent = flat.directRoutes || 0;
-        document.getElementById('flat-total-hops').textContent = flat.totalMessages || 0;
+        document.getElementById('flat-total-hops').textContent = flat.totalHops || 0;
 
         document.getElementById('fed-gateway-count').textContent = federation.gatewayCount || 0;
         document.getElementById('fed-avg-hops').textContent = federation.averageHops.toFixed(1) || '0.0';
@@ -356,7 +356,7 @@ class FloodWatchApp {
         document.getElementById('avg-delay').textContent =
             `F: ${flat.averageLatency}ms | Fed: ${Math.round(federation.averageLatency)}ms`;
         document.getElementById('network-overhead').textContent =
-            `Hops: F:1 | Fed:${federation.averageHops.toFixed(1)}`;
+            `Hops: F:${flat.averageHops.toFixed(1)} | Fed:${federation.averageHops.toFixed(1)}`;
     }
 
 
@@ -588,7 +588,13 @@ class FloodWatchApp {
         logEntry.className = `server-log-entry ${data.type.toLowerCase()}`;
 
         let messageDetails = '';
-        if (data.type === 'ALERT' && data.data) {
+        let isRecoveryMessage = data.data && data.data.recoveryNotification;
+
+        if (isRecoveryMessage) {
+            const nodeType = data.data.gatewayRecovery ? 'Gateway' : 'Sensor';
+            messageDetails = `🔄 ${nodeType} Recovery | Battery: ${data.data.batteryLevel ? data.data.batteryLevel.toFixed(2) : 'N/A'}`;
+            logEntry.className += ' recovery-message';
+        } else if (data.type === 'ALERT' && data.data) {
             messageDetails = `Water: ${data.data.waterLevel || 0}m`;
         } else if (data.type === 'HELLO' && data.data && data.data.neighbors) {
             const neighborCount = data.data.neighbors.length;
