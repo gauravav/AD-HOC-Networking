@@ -42,6 +42,12 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('trigger-instant-flood', (data) => {
+    if (simulation) {
+      simulation.triggerFlood(data.x, data.y, data.waterLevel);
+    }
+  });
+
   // Node failure functionality disabled
 
   socket.on('disconnect', () => {

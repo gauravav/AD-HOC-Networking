@@ -33,7 +33,10 @@ class FloodWatchApp {
             floodsTriggered: 0,
             timer: null,
             speedMultiplier: 12, // 12x faster than real-time
-            expectedTotalFloods: 0
+            expectedTotalFloods: 0,
+            floodQueue: [], // Queue of pending floods
+            currentFlood: null, // Currently active flood
+            nextFloodTimeout: null // Timeout for next flood
         };
 
         // Metrics tracking for comparison
@@ -203,6 +206,12 @@ class FloodWatchApp {
 
         this.socket.on('flood-receded', (data) => {
             this.handleFloodReceded(data);
+
+            // If this was from our timed simulation, trigger next flood
+            if (this.timedSimulation.isRunning && this.timedSimulation.currentFlood &&
+                this.timedSimulation.currentFlood.id === data.floodId) {
+                this.onCurrentFloodEnded();
+            }
         });
 
         // Node and gateway events removed
@@ -846,12 +855,14 @@ class FloodWatchApp {
         // Calculate simulation parameters
         const simulatedHours = realDuration * this.timedSimulation.speedMultiplier / 60; // Convert real minutes to simulated hours
         const expectedFloods = Math.floor(simulatedHours * floodFrequency);
-        const realFloodInterval = (realDuration * 60 * 1000) / expectedFloods; // Real milliseconds between floods
 
         if (expectedFloods === 0) {
             alert(`Warning: No floods will occur with current settings!`);
             return;
         }
+
+        // Generate all flood parameters upfront
+        this.generateFloodQueue(expectedFloods);
 
         // Set simulation state
         this.timedSimulation.isRunning = true;
@@ -861,6 +872,7 @@ class FloodWatchApp {
         this.timedSimulation.floodFrequency = floodFrequency;
         this.timedSimulation.floodsTriggered = 0;
         this.timedSimulation.expectedTotalFloods = expectedFloods;
+        this.timedSimulation.currentFlood = null;
 
         // Reset metrics collection
         this.resetMetrics();
@@ -872,26 +884,17 @@ class FloodWatchApp {
         document.getElementById('timed-sim-status').style.display = 'block';
         document.getElementById('expected-total').textContent = expectedFloods;
 
-        // Start flood generation
-        this.timedSimulation.interval = setInterval(() => {
-            this.triggerRandomFlood();
-        }, realFloodInterval);
-
-        // Trigger first flood immediately for immediate feedback
-        setTimeout(() => {
-            if (this.timedSimulation.isRunning) {
-                this.triggerRandomFlood();
-            }
-        }, 1000); // First flood after 1 second
-
         // Start countdown timer
         this.updateTimerDisplay();
         this.timedSimulation.timer = setInterval(() => {
             this.updateTimerDisplay();
         }, 1000);
 
-        this.logMessage(`⚡ Fast-forward simulation started - ${realDuration} real minutes = ${simulatedHours.toFixed(1)} simulated hours`, 'info');
-        this.logMessage(`🌊 Expected ${expectedFloods} floods at ${floodFrequency} floods/hour (${(realFloodInterval/1000).toFixed(1)}s real intervals)`, 'info');
+        // Start the sequential flooding process
+        this.scheduleNextFlood();
+
+        this.logMessage(`⚡ Sequential flood simulation started - ${realDuration} real minutes = ${simulatedHours.toFixed(1)} simulated hours`, 'info');
+        this.logMessage(`🌊 Expected ${expectedFloods} sequential floods (no overlaps) at ${floodFrequency} floods/hour simulated frequency`, 'info');
         this.logMessage(`🚀 Speed: 12x faster than real-time`, 'info');
     }
 
@@ -900,7 +903,7 @@ class FloodWatchApp {
 
         this.timedSimulation.isRunning = false;
 
-        // Clear intervals
+        // Clear timeouts and intervals
         if (this.timedSimulation.interval) {
             clearInterval(this.timedSimulation.interval);
             this.timedSimulation.interval = null;
@@ -911,12 +914,21 @@ class FloodWatchApp {
             this.timedSimulation.timer = null;
         }
 
+        if (this.timedSimulation.nextFloodTimeout) {
+            clearTimeout(this.timedSimulation.nextFloodTimeout);
+            this.timedSimulation.nextFloodTimeout = null;
+        }
+
+        // Clear flood queue
+        this.timedSimulation.floodQueue = [];
+        this.timedSimulation.currentFlood = null;
+
         // Update UI
         document.getElementById('start-timed-simulation-btn').disabled = false;
         document.getElementById('stop-timed-simulation-btn').disabled = true;
         document.getElementById('timed-sim-status').style.display = 'none';
 
-        this.logMessage(`🛑 Timed simulation stopped - ${this.timedSimulation.floodsTriggered} floods triggered`, 'info');
+        this.logMessage(`🛑 Sequential simulation stopped - ${this.timedSimulation.floodsTriggered} floods triggered`, 'info');
     }
 
     updateTimerDisplay() {
@@ -1157,6 +1169,112 @@ class FloodWatchApp {
         URL.revokeObjectURL(url);
 
         this.logMessage('📊 Metrics exported successfully', 'info');
+    }
+
+    generateFloodQueue(expectedFloods) {
+        this.timedSimulation.floodQueue = [];
+
+        for (let i = 0; i < expectedFloods; i++) {
+            // Generate random flood parameters
+            const floodParams = {
+                id: `AUTO-FLOOD-${Date.now()}-${i}`,
+                x: Math.floor(Math.random() * this.currentConfig.gridWidth),
+                y: Math.floor(Math.random() * this.currentConfig.gridHeight),
+                radius: 3 + Math.random() * 7, // 3-10m radius
+                maxWaterLevel: 1.5 + Math.random() * 2.5, // 1.5-4.0m water level
+                duration: 30 + Math.random() * 90, // 30-120 seconds
+                floodNumber: i + 1
+            };
+
+            this.timedSimulation.floodQueue.push(floodParams);
+        }
+
+        this.logMessage(`📋 Generated queue of ${expectedFloods} sequential floods`, 'info');
+    }
+
+    scheduleNextFlood() {
+        if (!this.timedSimulation.isRunning || this.timedSimulation.floodQueue.length === 0) {
+            return;
+        }
+
+        // Calculate when to trigger next flood
+        const totalRealTime = this.timedSimulation.realDuration;
+        const totalFloods = this.timedSimulation.expectedTotalFloods;
+        const floodsCompleted = this.timedSimulation.floodsTriggered;
+
+        // Space floods evenly across the real duration, but account for flood duration
+        const baseInterval = totalRealTime / totalFloods;
+        const avgFloodDuration = 60 * 1000; // Assume average 60 second flood duration
+        const adjustedInterval = Math.max(2000, baseInterval - avgFloodDuration); // Minimum 2 second gap
+
+        this.timedSimulation.nextFloodTimeout = setTimeout(() => {
+            this.triggerNextSequentialFlood();
+        }, adjustedInterval);
+
+        this.logMessage(`⏰ Next flood scheduled in ${(adjustedInterval/1000).toFixed(1)} seconds`, 'info');
+    }
+
+    triggerNextSequentialFlood() {
+        if (!this.timedSimulation.isRunning || this.timedSimulation.floodQueue.length === 0) {
+            return;
+        }
+
+        // Check if we've exceeded our time limit
+        const elapsed = Date.now() - this.timedSimulation.startTime;
+        if (elapsed >= this.timedSimulation.realDuration) {
+            this.logMessage('⏰ Simulation time limit reached', 'info');
+            this.stopTimedSimulation();
+            return;
+        }
+
+        // Get next flood from queue
+        const floodParams = this.timedSimulation.floodQueue.shift();
+        this.timedSimulation.currentFlood = floodParams;
+        this.timedSimulation.floodsTriggered++;
+
+        // Log before triggering
+        this.logMessage(`🎯 Triggering sequential flood ${floodParams.floodNumber}/${this.timedSimulation.expectedTotalFloods}...`, 'info');
+
+        // Trigger instant flood (not gradual)
+        this.socket.emit('trigger-instant-flood', {
+            x: floodParams.x,
+            y: floodParams.y,
+            radius: floodParams.radius,
+            waterLevel: floodParams.maxWaterLevel
+        });
+
+        // Log detailed flood info
+        this.logMessage(`🌊 Sequential instant flood ${floodParams.floodNumber} at (${floodParams.x}, ${floodParams.y}) - ${floodParams.radius.toFixed(1)}m radius, ${floodParams.maxWaterLevel.toFixed(1)}m water`, 'warning');
+
+        // Update UI immediately
+        document.getElementById('floods-triggered').textContent = this.timedSimulation.floodsTriggered;
+
+        // For instant floods, simulate duration and then mark as complete
+        setTimeout(() => {
+            if (this.timedSimulation.isRunning && this.timedSimulation.currentFlood === floodParams) {
+                this.onCurrentFloodEnded();
+            }
+        }, floodParams.duration * 1000); // Convert duration to milliseconds
+    }
+
+    onCurrentFloodEnded() {
+        if (!this.timedSimulation.isRunning) return;
+
+        this.logMessage(`✅ Flood ${this.timedSimulation.currentFlood?.floodNumber} completed - no overlap`, 'success');
+        this.timedSimulation.currentFlood = null;
+
+        // Schedule next flood after a brief pause (2-5 seconds)
+        const pauseBetweenFloods = 2000 + Math.random() * 3000; // 2-5 seconds
+
+        setTimeout(() => {
+            if (this.timedSimulation.floodQueue.length > 0) {
+                this.triggerNextSequentialFlood();
+            } else {
+                // All floods completed
+                this.logMessage(`🎉 All ${this.timedSimulation.expectedTotalFloods} sequential floods completed!`, 'success');
+                this.stopTimedSimulation();
+            }
+        }, pauseBetweenFloods);
     }
 
     updateSimulationPreview() {

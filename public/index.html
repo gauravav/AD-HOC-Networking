@@ -39,7 +39,7 @@
                     <h3>Events</h3>
                     <button id="trigger-flood-btn" class="btn warning">🌊 Trigger Flood</button>
                     <div class="simulation-controls">
-                        <h4>🎯 Fast-Forward Simulation (12x Speed)</h4>
+                        <h4>🎯 Sequential Fast-Forward Simulation (12x Speed)</h4>
                         <label>Real-World Duration (minutes): <input type="number" id="real-duration" value="10" min="1" max="60"></label>
                         <label>Simulated Flood Frequency (floods/hour): <input type="number" id="flood-frequency" value="10" min="1" max="60" step="1"></label>
 
@@ -51,7 +51,7 @@
                                 <strong>🌊 Expected Floods:</strong> <span id="expected-floods-span">20</span>
                             </div>
                             <div class="preview-item">
-                                <strong>⚡ Speed:</strong> <span>12x faster than real-time</span>
+                                <strong>⚡ Speed:</strong> <span>12x faster, sequential (no overlaps)</span>
                             </div>
                         </div>
 
