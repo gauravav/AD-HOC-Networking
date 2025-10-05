@@ -22,15 +22,18 @@ class FloodWatchApp {
         this.dualGridVis = new DualGridVisualization('flat-grid-canvas', 'federation-grid-canvas');
         this.metricsChart = new MetricsChart('metrics-chart');
 
-        // Time-based simulation state
+        // Fast-forward simulation state (12x speed: 10 real minutes = 2 hours simulated)
         this.timedSimulation = {
             isRunning: false,
-            duration: 0,
+            realDuration: 0, // Real-world duration in milliseconds
+            simulatedDuration: 0, // Simulated duration in milliseconds
             startTime: 0,
-            floodFrequency: 0,
+            floodFrequency: 0, // floods per simulated hour
             interval: null,
             floodsTriggered: 0,
-            timer: null
+            timer: null,
+            speedMultiplier: 12, // 12x faster than real-time
+            expectedTotalFloods: 0
         };
 
         // Metrics tracking for comparison
@@ -150,6 +153,18 @@ class FloodWatchApp {
         document.getElementById('reset-metrics-btn').addEventListener('click', () => {
             this.resetMetrics();
         });
+
+        // Update simulation preview when inputs change
+        document.getElementById('real-duration').addEventListener('input', () => {
+            this.updateSimulationPreview();
+        });
+
+        document.getElementById('flood-frequency').addEventListener('input', () => {
+            this.updateSimulationPreview();
+        });
+
+        // Initialize preview
+        this.updateSimulationPreview();
 
         // Grid click handler
         window.onGridClick = (x, y) => {
@@ -820,29 +835,32 @@ class FloodWatchApp {
             return;
         }
 
-        const duration = parseInt(document.getElementById('sim-duration').value);
-        const frequency = parseFloat(document.getElementById('flood-frequency').value);
+        const realDuration = parseInt(document.getElementById('real-duration').value);
+        const floodFrequency = parseInt(document.getElementById('flood-frequency').value);
 
-        if (duration <= 0 || frequency <= 0) {
+        if (realDuration <= 0 || floodFrequency <= 0) {
             alert('Please enter valid duration and frequency values');
             return;
         }
 
-        // Validate that we'll actually see floods in the simulation time
-        const floodInterval = (60 / frequency) * 1000; // Milliseconds between floods
-        const simulationDuration = duration * 60 * 1000; // Simulation duration in milliseconds
-        const expectedFloods = Math.floor(simulationDuration / floodInterval);
+        // Calculate simulation parameters
+        const simulatedHours = realDuration * this.timedSimulation.speedMultiplier / 60; // Convert real minutes to simulated hours
+        const expectedFloods = Math.floor(simulatedHours * floodFrequency);
+        const realFloodInterval = (realDuration * 60 * 1000) / expectedFloods; // Real milliseconds between floods
 
         if (expectedFloods === 0) {
-            alert(`Warning: With ${frequency} floods/minute over ${duration} minutes, no floods will occur!\nIncrease frequency or duration. Current interval: ${(floodInterval/1000).toFixed(1)} seconds between floods.`);
+            alert(`Warning: No floods will occur with current settings!`);
             return;
         }
 
+        // Set simulation state
         this.timedSimulation.isRunning = true;
-        this.timedSimulation.duration = duration * 60 * 1000; // Convert to milliseconds
+        this.timedSimulation.realDuration = realDuration * 60 * 1000; // Real duration in milliseconds
+        this.timedSimulation.simulatedDuration = simulatedHours * 60 * 60 * 1000; // Simulated duration in milliseconds
         this.timedSimulation.startTime = Date.now();
-        this.timedSimulation.floodFrequency = frequency;
+        this.timedSimulation.floodFrequency = floodFrequency;
         this.timedSimulation.floodsTriggered = 0;
+        this.timedSimulation.expectedTotalFloods = expectedFloods;
 
         // Reset metrics collection
         this.resetMetrics();
@@ -852,18 +870,19 @@ class FloodWatchApp {
         document.getElementById('start-timed-simulation-btn').disabled = true;
         document.getElementById('stop-timed-simulation-btn').disabled = false;
         document.getElementById('timed-sim-status').style.display = 'block';
+        document.getElementById('expected-total').textContent = expectedFloods;
 
-        // Start flood generation using the previously calculated floodInterval
+        // Start flood generation
         this.timedSimulation.interval = setInterval(() => {
             this.triggerRandomFlood();
-        }, floodInterval);
+        }, realFloodInterval);
 
         // Trigger first flood immediately for immediate feedback
         setTimeout(() => {
             if (this.timedSimulation.isRunning) {
                 this.triggerRandomFlood();
             }
-        }, 2000); // First flood after 2 seconds
+        }, 1000); // First flood after 1 second
 
         // Start countdown timer
         this.updateTimerDisplay();
@@ -871,8 +890,9 @@ class FloodWatchApp {
             this.updateTimerDisplay();
         }, 1000);
 
-        this.logMessage(`🎯 Timed simulation started - ${duration} minutes, ${frequency} floods/minute`, 'info');
-        this.logMessage(`📊 Expected ${expectedFloods} floods over ${duration} minutes (${(floodInterval/1000).toFixed(1)}s intervals)`, 'info');
+        this.logMessage(`⚡ Fast-forward simulation started - ${realDuration} real minutes = ${simulatedHours.toFixed(1)} simulated hours`, 'info');
+        this.logMessage(`🌊 Expected ${expectedFloods} floods at ${floodFrequency} floods/hour (${(realFloodInterval/1000).toFixed(1)}s real intervals)`, 'info');
+        this.logMessage(`🚀 Speed: 12x faster than real-time`, 'info');
     }
 
     stopTimedSimulation() {
@@ -900,18 +920,26 @@ class FloodWatchApp {
     }
 
     updateTimerDisplay() {
-        const elapsed = Date.now() - this.timedSimulation.startTime;
-        const remaining = Math.max(0, this.timedSimulation.duration - elapsed);
+        const realElapsed = Date.now() - this.timedSimulation.startTime;
+        const realRemaining = Math.max(0, this.timedSimulation.realDuration - realElapsed);
 
-        if (remaining <= 0) {
+        if (realRemaining <= 0) {
             this.stopTimedSimulation();
             return;
         }
 
-        const minutes = Math.floor(remaining / 60000);
-        const seconds = Math.floor((remaining % 60000) / 1000);
+        // Calculate real time remaining
+        const realMinutes = Math.floor(realRemaining / 60000);
+        const realSeconds = Math.floor((realRemaining % 60000) / 1000);
 
-        document.getElementById('time-remaining').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        // Calculate simulated time elapsed (12x faster)
+        const simulatedElapsed = realElapsed * this.timedSimulation.speedMultiplier;
+        const simulatedHours = Math.floor(simulatedElapsed / (60 * 60 * 1000));
+        const simulatedMinutes = Math.floor((simulatedElapsed % (60 * 60 * 1000)) / (60 * 1000));
+
+        // Update UI
+        document.getElementById('real-time-remaining').textContent = `${realMinutes}:${realSeconds.toString().padStart(2, '0')}`;
+        document.getElementById('sim-time-elapsed').textContent = `${simulatedHours}h ${simulatedMinutes}m`;
         document.getElementById('floods-triggered').textContent = this.timedSimulation.floodsTriggered;
     }
 
@@ -1129,6 +1157,35 @@ class FloodWatchApp {
         URL.revokeObjectURL(url);
 
         this.logMessage('📊 Metrics exported successfully', 'info');
+    }
+
+    updateSimulationPreview() {
+        const realDuration = parseInt(document.getElementById('real-duration').value) || 10;
+        const floodFrequency = parseInt(document.getElementById('flood-frequency').value) || 10;
+
+        // Calculate simulated time (12x speed)
+        const simulatedHours = realDuration * this.timedSimulation.speedMultiplier / 60;
+        const expectedFloods = Math.floor(simulatedHours * floodFrequency);
+
+        // Update preview display
+        if (simulatedHours >= 1) {
+            document.getElementById('simulated-time-span').textContent = `${simulatedHours.toFixed(1)} hours`;
+        } else {
+            const simulatedMinutes = simulatedHours * 60;
+            document.getElementById('simulated-time-span').textContent = `${simulatedMinutes.toFixed(0)} minutes`;
+        }
+
+        document.getElementById('expected-floods-span').textContent = expectedFloods.toString();
+
+        // Visual feedback for the preview
+        const previewElement = document.getElementById('sim-preview');
+        if (expectedFloods === 0) {
+            previewElement.style.borderLeft = '4px solid #f44336';
+            previewElement.style.background = 'rgba(244, 67, 54, 0.05)';
+        } else {
+            previewElement.style.borderLeft = '4px solid #4CAF50';
+            previewElement.style.background = 'rgba(76, 175, 80, 0.05)';
+        }
     }
 }
 

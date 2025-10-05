@@ -1089,6 +1089,42 @@ footer {
     font-weight: bold;
 }
 
+.simulation-preview {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: rgba(76, 175, 80, 0.05);
+    border-radius: 6px;
+    border-left: 4px solid #4CAF50;
+    transition: all 0.3s ease;
+}
+
+.preview-item {
+    margin: 0.5rem 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.preview-item strong {
+    color: #333;
+}
+
+.preview-item span {
+    color: #666;
+    font-weight: 500;
+}
+
+.status-row {
+    display: flex;
+    justify-content: space-between;
+    margin: 0.5rem 0;
+}
+
+.status-row span {
+    flex: 1;
+    margin-right: 1rem;
+}
+
 /* Architecture Comparison Metrics */
 .architecture-comparison {
     margin-top: 2rem;
@@ -1209,6 +1245,26 @@ footer {
         display: block;
         margin-bottom: 0.5rem;
         margin-right: 0;
+    }
+
+    .simulation-preview {
+        margin: 0.5rem 0;
+        padding: 0.75rem;
+    }
+
+    .preview-item {
+        flex-direction: column;
+        align-items: flex-start;
+        margin: 0.3rem 0;
+    }
+
+    .status-row {
+        flex-direction: column;
+    }
+
+    .status-row span {
+        margin-right: 0;
+        margin-bottom: 0.5rem;
     }
 }
 

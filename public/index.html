@@ -39,15 +39,34 @@
                     <h3>Events</h3>
                     <button id="trigger-flood-btn" class="btn warning">🌊 Trigger Flood</button>
                     <div class="simulation-controls">
-                        <h4>🎯 Time-Based Simulation</h4>
-                        <label>Simulation Duration (minutes): <input type="number" id="sim-duration" value="5" min="1" max="60"></label>
-                        <label>Flood Frequency (floods/minute): <input type="number" id="flood-frequency" value="1" min="0.1" max="10" step="0.1"></label>
-                        <small style="color: #666; display: block; margin-top: 0.5rem;">💡 Tip: 1 flood/minute = 1 flood every 60 seconds. Use 0.1 for testing = 1 flood every 10 minutes</small>
-                        <button id="start-timed-simulation-btn" class="btn success">⏰ Start Timed Simulation</button>
-                        <button id="stop-timed-simulation-btn" class="btn danger" disabled>⏹️ Stop Timed Simulation</button>
+                        <h4>🎯 Fast-Forward Simulation (12x Speed)</h4>
+                        <label>Real-World Duration (minutes): <input type="number" id="real-duration" value="10" min="1" max="60"></label>
+                        <label>Simulated Flood Frequency (floods/hour): <input type="number" id="flood-frequency" value="10" min="1" max="60" step="1"></label>
+
+                        <div class="simulation-preview" id="sim-preview">
+                            <div class="preview-item">
+                                <strong>📅 Simulated Time:</strong> <span id="simulated-time-span">2 hours</span>
+                            </div>
+                            <div class="preview-item">
+                                <strong>🌊 Expected Floods:</strong> <span id="expected-floods-span">20</span>
+                            </div>
+                            <div class="preview-item">
+                                <strong>⚡ Speed:</strong> <span>12x faster than real-time</span>
+                            </div>
+                        </div>
+
+                        <button id="start-timed-simulation-btn" class="btn success">⚡ Start Fast-Forward Simulation</button>
+                        <button id="stop-timed-simulation-btn" class="btn danger" disabled>⏹️ Stop Simulation</button>
+
                         <div id="timed-sim-status" class="sim-status-display" style="display: none;">
-                            <span>Time Remaining: <span id="time-remaining">--</span></span>
-                            <span>Floods Triggered: <span id="floods-triggered">0</span></span>
+                            <div class="status-row">
+                                <span>🕐 Real Time Remaining: <span id="real-time-remaining">--</span></span>
+                                <span>⏱️ Simulated Time Elapsed: <span id="sim-time-elapsed">--</span></span>
+                            </div>
+                            <div class="status-row">
+                                <span>🌊 Floods Triggered: <span id="floods-triggered">0</span></span>
+                                <span>📊 Expected Total: <span id="expected-total">--</span></span>
+                            </div>
                         </div>
                     </div>
                     <p class="info-text">All nodes are uniform sensors with configurable range</p>
