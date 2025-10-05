@@ -461,7 +461,7 @@ class FloodWatchSimulation {
 
     // Process alert messages through coordination agent
     if (message.type === MessageTypes.ALERT) {
-      const result = this.coordinationAgent.processAlert(message);
+      const result = this.coordinationAgent.processAlert(message, architecture);
       if (result.action === 'INCIDENT_CREATED') {
         this.metrics.incidentsCreated++;
       } else if (result.action === 'DUPLICATE_REMOVED') {
@@ -785,6 +785,10 @@ class FloodWatchSimulation {
       currentTick: this.currentTick,
       metrics: this.metrics,
       activeIncidents: this.coordinationAgent.getAllActiveIncidents().length,
+      flatActiveIncidents: this.coordinationAgent.getFlatActiveIncidents().length,
+      federationActiveIncidents: this.coordinationAgent.getFederationActiveIncidents().length,
+      flatIncidentsList: this.coordinationAgent.getFlatActiveIncidents(),
+      federationIncidentsList: this.coordinationAgent.getFederationActiveIncidents(),
       centralServerMessages: this.centralServer.messagesReceived.length,
       config: this.config
     };

@@ -63,7 +63,9 @@ class FloodIncident {
 class CoordinationAgent {
   constructor(id) {
     this.id = id;
-    this.incidents = new Map();
+    this.incidents = new Map(); // Legacy incidents (for backward compatibility)
+    this.flatIncidents = new Map(); // Flat architecture incidents
+    this.federationIncidents = new Map(); // Federation architecture incidents
     this.processedAlerts = new Set();
     this.duplicateAlerts = new Set();
     this.nodeFailures = new Map(); // Track node failures and their detection evidence
@@ -100,7 +102,7 @@ class CoordinationAgent {
     }
   }
 
-  processAlert(alert) {
+  processAlert(alert, architecture = 'flat') {
     // Check if alert is duplicate
     if (this.isDuplicateAlert(alert)) {
       this.duplicateAlerts.add(alert.id);
@@ -114,8 +116,8 @@ class CoordinationAgent {
     // Mark alert as processed
     this.processedAlerts.add(alert.id);
 
-    // Find existing incident or create new one
-    const existingIncident = this.findNearbyIncident(alert);
+    // Find existing incident or create new one in the appropriate architecture
+    const existingIncident = this.findNearbyIncident(alert, architecture);
 
     if (existingIncident) {
       existingIncident.addAlert(alert);
@@ -123,15 +125,17 @@ class CoordinationAgent {
         action: 'ALERT_MERGED',
         alertId: alert.id,
         incidentId: existingIncident.id,
-        incident: existingIncident
+        incident: existingIncident,
+        architecture: architecture
       };
     } else {
-      const newIncident = this.createIncident(alert);
+      const newIncident = this.createIncident(alert, architecture);
       return {
         action: 'INCIDENT_CREATED',
         alertId: alert.id,
         incidentId: newIncident.id,
-        incident: newIncident
+        incident: newIncident,
+        architecture: architecture
       };
     }
   }
@@ -153,10 +157,13 @@ class CoordinationAgent {
     return recentAlerts.length > 0;
   }
 
-  findNearbyIncident(alert) {
+  findNearbyIncident(alert, architecture = 'flat') {
     const alertLocation = alert.data.location;
 
-    for (const incident of this.incidents.values()) {
+    // Get the appropriate incident map based on architecture
+    const incidentMap = this.getIncidentMap(architecture);
+
+    for (const incident of incidentMap.values()) {
       if (incident.status !== 'ACTIVE') continue;
 
       const incidentLocation = incident.getAverageLocation();
@@ -170,8 +177,19 @@ class CoordinationAgent {
     return null;
   }
 
-  createIncident(alert) {
-    const incidentId = `INC-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+  getIncidentMap(architecture) {
+    switch (architecture) {
+      case 'federation':
+        return this.federationIncidents;
+      case 'flat':
+        return this.flatIncidents;
+      default:
+        return this.flatIncidents; // Default to flat
+    }
+  }
+
+  createIncident(alert, architecture = 'flat') {
+    const incidentId = `INC-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const severity = this.calculateInitialSeverity(alert);
 
     const incident = new FloodIncident(
@@ -181,7 +199,11 @@ class CoordinationAgent {
       alert
     );
 
+    // Store in both legacy and architecture-specific maps
     this.incidents.set(incidentId, incident);
+    const incidentMap = this.getIncidentMap(architecture);
+    incidentMap.set(incidentId, incident);
+
     return incident;
   }
 
@@ -282,6 +304,20 @@ class CoordinationAgent {
   getAllActiveIncidents() {
     return Array.from(this.incidents.values())
       .filter(incident => incident.status === 'ACTIVE');
+  }
+
+  getActiveIncidentsByArchitecture(architecture) {
+    const incidentMap = this.getIncidentMap(architecture);
+    return Array.from(incidentMap.values())
+      .filter(incident => incident.status === 'ACTIVE');
+  }
+
+  getFlatActiveIncidents() {
+    return this.getActiveIncidentsByArchitecture('flat');
+  }
+
+  getFederationActiveIncidents() {
+    return this.getActiveIncidentsByArchitecture('federation');
   }
 
   getStatistics() {

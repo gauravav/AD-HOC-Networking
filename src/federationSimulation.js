@@ -630,7 +630,7 @@ class FederationSimulation extends FloodWatchSimulation {
   deliverFederatedToCentralServer(message, originalSender) {
     // Process federated message through coordination agent
     if (message.type === MessageTypes.ALERT) {
-      const result = this.coordinationAgent.processAlert(message);
+      const result = this.coordinationAgent.processAlert(message, 'federation');
 
       // Track federation metrics
       this.federationMetrics.totalHops += message.hops || 1;

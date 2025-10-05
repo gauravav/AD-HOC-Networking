@@ -77,7 +77,7 @@
                 </div>
                 <div class="status-item">
                     <span class="label">Active Incidents</span>
-                    <span id="active-incidents" class="value">0</span>
+                    <span id="active-incidents" class="value">F: <span id="flat-incidents">0</span> | Fed: <span id="federation-incidents">0</span></span>
                 </div>
                 <div class="status-item">
                     <span class="label">Messages Sent</span>
@@ -224,8 +224,21 @@
         <!-- Incidents Panel -->
         <section id="incidents-panel" class="panel">
             <h2>🚨 Active Incidents</h2>
-            <div id="incidents-list">
-                <p class="no-data">No active incidents</p>
+
+            <!-- Flat Architecture Incidents -->
+            <div class="incident-section">
+                <h3 class="incident-architecture-title">📡 Flat Organization</h3>
+                <div id="flat-incidents-list" class="incidents-list">
+                    <p class="no-data">No active incidents</p>
+                </div>
+            </div>
+
+            <!-- Federation Architecture Incidents -->
+            <div class="incident-section">
+                <h3 class="incident-architecture-title">🏢 Federation Organization</h3>
+                <div id="federation-incidents-list" class="incidents-list">
+                    <p class="no-data">No active incidents</p>
+                </div>
             </div>
         </section>
 

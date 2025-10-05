@@ -299,7 +299,11 @@ class FloodWatchApp {
         document.getElementById('current-tick').textContent = status.currentTick;
         document.getElementById('active-nodes').textContent = status.config.sensorCount;
         document.getElementById('central-messages').textContent = status.centralServerMessages || 0;
-        document.getElementById('active-incidents').textContent = status.activeIncidents;
+
+        // Update separate incident counts
+        document.getElementById('flat-incidents').textContent = status.flatActiveIncidents || 0;
+        document.getElementById('federation-incidents').textContent = status.federationActiveIncidents || 0;
+
         document.getElementById('messages-sent').textContent = status.metrics.messagesGenerated;
 
         // Update metrics
@@ -312,6 +316,9 @@ class FloodWatchApp {
         if (incidentReport) {
             this.updateIncidents(incidentReport);
         }
+
+        // Update individual incident lists
+        this.updateIndividualIncidents(status);
     }
 
     updateMetrics(metrics) {
@@ -407,6 +414,67 @@ class FloodWatchApp {
                 </div>
             </div>
         `;
+        }).join('');
+    }
+
+    updateIndividualIncidents(status) {
+        // Update flat architecture incidents
+        this.updateArchitectureIncidents(
+            status.flatIncidentsList || [],
+            'flat-incidents-list',
+            '📡 Flat Organization'
+        );
+
+        // Update federation architecture incidents
+        this.updateArchitectureIncidents(
+            status.federationIncidentsList || [],
+            'federation-incidents-list',
+            '🏢 Federation Organization'
+        );
+    }
+
+    updateArchitectureIncidents(incidents, containerId, architectureName) {
+        const container = document.getElementById(containerId);
+
+        if (!container) {
+            console.warn(`Container ${containerId} not found`);
+            return;
+        }
+
+        if (incidents.length === 0) {
+            container.innerHTML = '<p class="no-data">No active incidents</p>';
+            return;
+        }
+
+        container.innerHTML = incidents.map(incident => {
+            const createdAt = new Date(incident.createdAt).toLocaleTimeString();
+            const lastUpdate = new Date(incident.lastUpdate).toLocaleTimeString();
+            const location = incident.getAverageLocation ? incident.getAverageLocation() : incident.location;
+
+            return `
+                <div class="incident-item fade-in" data-incident-id="${incident.id}">
+                    <div class="incident-header">
+                        <span><strong>🌊 ${incident.id}</strong></span>
+                        <span class="incident-severity severity-${incident.severity.toLowerCase()}">
+                            ${incident.severity}
+                        </span>
+                    </div>
+                    <div class="incident-details">
+                        <div class="incident-info">
+                            <span class="incident-location">📍 (${Math.round(location.x)}, ${Math.round(location.y)})</span>
+                            <span class="incident-sensors">👁️ ${incident.affectedSensors ? incident.affectedSensors.size : 0} sensors</span>
+                        </div>
+                        <div class="incident-timing">
+                            <small>Created: ${createdAt} | Updated: ${lastUpdate}</small>
+                        </div>
+                        <div class="incident-water-levels">
+                            ${incident.alerts ? incident.alerts.slice(-3).map(alert =>
+                                `<span class="water-level">💧 ${alert.data.waterLevel.toFixed(1)}m</span>`
+                            ).join(' ') : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
         }).join('');
     }
 
@@ -626,11 +694,6 @@ class FloodWatchApp {
         `;
 
         serverLogContent.appendChild(logEntry);
-
-        // Auto-scroll if enabled
-        if (document.getElementById('server-auto-scroll').checked) {
-            serverLogContent.scrollTop = serverLogContent.scrollHeight;
-        }
 
         // Keep only last 100 log entries
         while (serverLogContent.children.length > 100) {

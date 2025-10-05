@@ -420,6 +420,68 @@ main {
     min-height: 0;
 }
 
+/* New incident section styling */
+.incident-section {
+    margin-bottom: 1.5rem;
+}
+
+.incident-architecture-title {
+    color: #3498db;
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0.5rem 0;
+    padding: 0.5rem;
+    background: rgba(52, 152, 219, 0.1);
+    border-left: 3px solid #3498db;
+    border-radius: 4px;
+}
+
+.incidents-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* Individual incident styling */
+.incident-info {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 0.25rem;
+}
+
+.incident-location,
+.incident-sensors {
+    font-size: 0.85rem;
+    color: #95a5a6;
+}
+
+.incident-timing {
+    margin-bottom: 0.5rem;
+}
+
+.incident-timing small {
+    color: #7f8c8d;
+    font-size: 0.75rem;
+}
+
+.incident-water-levels {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.water-level {
+    background: rgba(52, 152, 219, 0.2);
+    border: 1px solid rgba(52, 152, 219, 0.4);
+    border-radius: 12px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+    color: #3498db;
+}
+
 .incident-item {
     background: rgba(231, 76, 60, 0.1);
     border: 1px solid rgba(231, 76, 60, 0.3);
