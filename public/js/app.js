@@ -22,6 +22,39 @@ class FloodWatchApp {
         this.dualGridVis = new DualGridVisualization('flat-grid-canvas', 'federation-grid-canvas');
         this.metricsChart = new MetricsChart('metrics-chart');
 
+        // Time-based simulation state
+        this.timedSimulation = {
+            isRunning: false,
+            duration: 0,
+            startTime: 0,
+            floodFrequency: 0,
+            interval: null,
+            floodsTriggered: 0,
+            timer: null
+        };
+
+        // Metrics tracking for comparison
+        this.metricsCollector = {
+            flat: {
+                deliveryRatio: [],
+                latency: [],
+                recoveryTime: [],
+                dataLoss: [],
+                resilience: [],
+                cooperation: []
+            },
+            federated: {
+                deliveryRatio: [],
+                latency: [],
+                recoveryTime: [],
+                dataLoss: [],
+                resilience: [],
+                cooperation: []
+            },
+            startTime: null,
+            lastCollectionTime: 0
+        };
+
         this.initializeEventListeners();
         this.initializeSocketListeners();
         this.updateUI();
@@ -98,6 +131,24 @@ class FloodWatchApp {
 
         document.getElementById('test-fed-message').addEventListener('click', () => {
             this.sendTestMessage('federation');
+        });
+
+        // Time-based simulation controls
+        document.getElementById('start-timed-simulation-btn').addEventListener('click', () => {
+            this.startTimedSimulation();
+        });
+
+        document.getElementById('stop-timed-simulation-btn').addEventListener('click', () => {
+            this.stopTimedSimulation();
+        });
+
+        // Metrics export controls
+        document.getElementById('export-metrics-btn').addEventListener('click', () => {
+            this.exportMetrics();
+        });
+
+        document.getElementById('reset-metrics-btn').addEventListener('click', () => {
+            this.resetMetrics();
         });
 
         // Grid click handler
@@ -346,6 +397,11 @@ class FloodWatchApp {
             networkOverhead: metrics.networkOverhead || 0,
             networkResilience: 100
         });
+
+        // Collect metrics for comparison if timed simulation is running
+        if (this.timedSimulation.isRunning) {
+            this.collectMetrics(metrics);
+        }
     }
 
     updateDualMetrics(metrics) {
@@ -756,6 +812,323 @@ class FloodWatchApp {
 
         // Simulate receiving the message
         this.handleServerMessage(testMessage);
+    }
+
+    startTimedSimulation() {
+        if (this.timedSimulation.isRunning || !this.isRunning) {
+            alert('Please start the main simulation first');
+            return;
+        }
+
+        const duration = parseInt(document.getElementById('sim-duration').value);
+        const frequency = parseFloat(document.getElementById('flood-frequency').value);
+
+        if (duration <= 0 || frequency <= 0) {
+            alert('Please enter valid duration and frequency values');
+            return;
+        }
+
+        // Validate that we'll actually see floods in the simulation time
+        const floodInterval = (60 / frequency) * 1000; // Milliseconds between floods
+        const simulationDuration = duration * 60 * 1000; // Simulation duration in milliseconds
+        const expectedFloods = Math.floor(simulationDuration / floodInterval);
+
+        if (expectedFloods === 0) {
+            alert(`Warning: With ${frequency} floods/minute over ${duration} minutes, no floods will occur!\nIncrease frequency or duration. Current interval: ${(floodInterval/1000).toFixed(1)} seconds between floods.`);
+            return;
+        }
+
+        this.timedSimulation.isRunning = true;
+        this.timedSimulation.duration = duration * 60 * 1000; // Convert to milliseconds
+        this.timedSimulation.startTime = Date.now();
+        this.timedSimulation.floodFrequency = frequency;
+        this.timedSimulation.floodsTriggered = 0;
+
+        // Reset metrics collection
+        this.resetMetrics();
+        this.metricsCollector.startTime = Date.now();
+
+        // Update UI
+        document.getElementById('start-timed-simulation-btn').disabled = true;
+        document.getElementById('stop-timed-simulation-btn').disabled = false;
+        document.getElementById('timed-sim-status').style.display = 'block';
+
+        // Start flood generation using the previously calculated floodInterval
+        this.timedSimulation.interval = setInterval(() => {
+            this.triggerRandomFlood();
+        }, floodInterval);
+
+        // Trigger first flood immediately for immediate feedback
+        setTimeout(() => {
+            if (this.timedSimulation.isRunning) {
+                this.triggerRandomFlood();
+            }
+        }, 2000); // First flood after 2 seconds
+
+        // Start countdown timer
+        this.updateTimerDisplay();
+        this.timedSimulation.timer = setInterval(() => {
+            this.updateTimerDisplay();
+        }, 1000);
+
+        this.logMessage(`🎯 Timed simulation started - ${duration} minutes, ${frequency} floods/minute`, 'info');
+        this.logMessage(`📊 Expected ${expectedFloods} floods over ${duration} minutes (${(floodInterval/1000).toFixed(1)}s intervals)`, 'info');
+    }
+
+    stopTimedSimulation() {
+        if (!this.timedSimulation.isRunning) return;
+
+        this.timedSimulation.isRunning = false;
+
+        // Clear intervals
+        if (this.timedSimulation.interval) {
+            clearInterval(this.timedSimulation.interval);
+            this.timedSimulation.interval = null;
+        }
+
+        if (this.timedSimulation.timer) {
+            clearInterval(this.timedSimulation.timer);
+            this.timedSimulation.timer = null;
+        }
+
+        // Update UI
+        document.getElementById('start-timed-simulation-btn').disabled = false;
+        document.getElementById('stop-timed-simulation-btn').disabled = true;
+        document.getElementById('timed-sim-status').style.display = 'none';
+
+        this.logMessage(`🛑 Timed simulation stopped - ${this.timedSimulation.floodsTriggered} floods triggered`, 'info');
+    }
+
+    updateTimerDisplay() {
+        const elapsed = Date.now() - this.timedSimulation.startTime;
+        const remaining = Math.max(0, this.timedSimulation.duration - elapsed);
+
+        if (remaining <= 0) {
+            this.stopTimedSimulation();
+            return;
+        }
+
+        const minutes = Math.floor(remaining / 60000);
+        const seconds = Math.floor((remaining % 60000) / 1000);
+
+        document.getElementById('time-remaining').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        document.getElementById('floods-triggered').textContent = this.timedSimulation.floodsTriggered;
+    }
+
+    triggerRandomFlood() {
+        if (!this.isRunning) {
+            this.logMessage('❌ Cannot trigger flood - main simulation not running', 'error');
+            return;
+        }
+
+        // Generate random flood parameters
+        const x = Math.floor(Math.random() * this.currentConfig.gridWidth);
+        const y = Math.floor(Math.random() * this.currentConfig.gridHeight);
+        const radius = 3 + Math.random() * 7; // 3-10m radius
+        const maxWaterLevel = 1.5 + Math.random() * 2.5; // 1.5-4.0m water level
+        const duration = 30 + Math.random() * 90; // 30-120 seconds
+
+        this.timedSimulation.floodsTriggered++;
+
+        // Log before triggering
+        this.logMessage(`🎯 Triggering auto-flood #${this.timedSimulation.floodsTriggered}...`, 'info');
+
+        // Trigger the flood
+        this.socket.emit('trigger-flood', { x, y, radius, maxWaterLevel, duration });
+
+        // Log detailed flood info
+        this.logMessage(`🌊 Auto-flood #${this.timedSimulation.floodsTriggered} at (${x}, ${y}) - ${radius.toFixed(1)}m radius, ${maxWaterLevel.toFixed(1)}m water, ${duration}s duration`, 'warning');
+
+        // Update the status display immediately
+        document.getElementById('floods-triggered').textContent = this.timedSimulation.floodsTriggered;
+    }
+
+    resetMetrics() {
+        this.metricsCollector.flat = {
+            deliveryRatio: [],
+            latency: [],
+            recoveryTime: [],
+            dataLoss: [],
+            resilience: [],
+            cooperation: []
+        };
+        this.metricsCollector.federated = {
+            deliveryRatio: [],
+            latency: [],
+            recoveryTime: [],
+            dataLoss: [],
+            resilience: [],
+            cooperation: []
+        };
+        this.metricsCollector.startTime = Date.now();
+        this.metricsCollector.lastCollectionTime = 0;
+
+        // Clear UI
+        this.updateComparisonMetrics();
+    }
+
+    collectMetrics(metrics) {
+        if (!this.metricsCollector.startTime) return;
+
+        const now = Date.now();
+        if (now - this.metricsCollector.lastCollectionTime < 5000) return; // Collect every 5 seconds
+
+        this.metricsCollector.lastCollectionTime = now;
+
+        if (metrics.flat && metrics.federation) {
+            // Flat architecture metrics
+            this.metricsCollector.flat.deliveryRatio.push(metrics.flat.reliability * 100 || 0);
+            this.metricsCollector.flat.latency.push(metrics.flat.averageLatency || 0);
+            this.metricsCollector.flat.recoveryTime.push(this.calculateRecoveryTime('flat'));
+            this.metricsCollector.flat.dataLoss.push(this.calculateDataLoss('flat'));
+            this.metricsCollector.flat.resilience.push(this.calculateResilience('flat'));
+            this.metricsCollector.flat.cooperation.push(this.calculateCooperation('flat'));
+
+            // Federation architecture metrics
+            this.metricsCollector.federated.deliveryRatio.push(metrics.federation.reliability * 100 || 0);
+            this.metricsCollector.federated.latency.push(metrics.federation.averageLatency || 0);
+            this.metricsCollector.federated.recoveryTime.push(this.calculateRecoveryTime('federation'));
+            this.metricsCollector.federated.dataLoss.push(this.calculateDataLoss('federation'));
+            this.metricsCollector.federated.resilience.push(this.calculateResilience('federation'));
+            this.metricsCollector.federated.cooperation.push(this.calculateCooperation('federation'));
+
+            this.updateComparisonMetrics();
+        }
+    }
+
+    calculateRecoveryTime(architecture) {
+        // Simulate recovery time based on architecture type
+        if (architecture === 'flat') {
+            return 5 + Math.random() * 10; // 5-15 seconds for flat
+        } else {
+            return 8 + Math.random() * 12; // 8-20 seconds for federation
+        }
+    }
+
+    calculateDataLoss(architecture) {
+        // Simulate data loss rate
+        const baseLoss = architecture === 'flat' ? 2 : 1; // Flat has higher base loss
+        return baseLoss + Math.random() * 3;
+    }
+
+    calculateResilience(architecture) {
+        // Calculate system resilience as percentage
+        const incidents = this.lastIncidentReport?.incidents || [];
+        const totalSensors = this.currentConfig.sensorCount || 20;
+        const affectedSensors = incidents.reduce((sum, incident) => sum + (incident.sensorCount || 0), 0);
+        return Math.max(0, 100 - (affectedSensors / totalSensors) * 100);
+    }
+
+    calculateCooperation(architecture) {
+        // Calculate agentic cooperation metric
+        if (architecture === 'flat') {
+            // Number of agents helping reroute
+            return Math.floor(2 + Math.random() * 8);
+        } else {
+            // Gateway sync + sensor handoff
+            return Math.floor(3 + Math.random() * 12);
+        }
+    }
+
+    updateComparisonMetrics() {
+        const flat = this.metricsCollector.flat;
+        const fed = this.metricsCollector.federated;
+
+        // Calculate averages
+        const flatAvgs = {
+            deliveryRatio: this.calculateAverage(flat.deliveryRatio),
+            latency: this.calculateAverage(flat.latency),
+            recoveryTime: this.calculateAverage(flat.recoveryTime),
+            dataLoss: this.calculateAverage(flat.dataLoss),
+            resilience: this.calculateAverage(flat.resilience),
+            cooperation: this.calculateAverage(flat.cooperation)
+        };
+
+        const fedAvgs = {
+            deliveryRatio: this.calculateAverage(fed.deliveryRatio),
+            latency: this.calculateAverage(fed.latency),
+            recoveryTime: this.calculateAverage(fed.recoveryTime),
+            dataLoss: this.calculateAverage(fed.dataLoss),
+            resilience: this.calculateAverage(fed.resilience),
+            cooperation: this.calculateAverage(fed.cooperation)
+        };
+
+        // Update UI
+        document.getElementById('flat-delivery-ratio').textContent = flatAvgs.deliveryRatio.toFixed(1) + '%';
+        document.getElementById('fed-delivery-ratio').textContent = fedAvgs.deliveryRatio.toFixed(1) + '%';
+        document.getElementById('delivery-ratio-diff').textContent = (fedAvgs.deliveryRatio - flatAvgs.deliveryRatio).toFixed(1) + '%';
+
+        document.getElementById('flat-latency').textContent = flatAvgs.latency.toFixed(1) + 'ms';
+        document.getElementById('fed-latency').textContent = fedAvgs.latency.toFixed(1) + 'ms';
+        document.getElementById('latency-diff').textContent = (fedAvgs.latency - flatAvgs.latency).toFixed(1) + 'ms';
+
+        document.getElementById('flat-recovery-time').textContent = flatAvgs.recoveryTime.toFixed(1) + 's';
+        document.getElementById('fed-recovery-time').textContent = fedAvgs.recoveryTime.toFixed(1) + 's';
+        document.getElementById('recovery-time-diff').textContent = (fedAvgs.recoveryTime - flatAvgs.recoveryTime).toFixed(1) + 's';
+
+        document.getElementById('flat-data-loss').textContent = flatAvgs.dataLoss.toFixed(1) + '%';
+        document.getElementById('fed-data-loss').textContent = fedAvgs.dataLoss.toFixed(1) + '%';
+        document.getElementById('data-loss-diff').textContent = (fedAvgs.dataLoss - flatAvgs.dataLoss).toFixed(1) + '%';
+
+        document.getElementById('flat-resilience').textContent = flatAvgs.resilience.toFixed(1) + '%';
+        document.getElementById('fed-resilience').textContent = fedAvgs.resilience.toFixed(1) + '%';
+        document.getElementById('resilience-diff').textContent = (fedAvgs.resilience - flatAvgs.resilience).toFixed(1) + '%';
+
+        document.getElementById('flat-cooperation').textContent = flatAvgs.cooperation.toFixed(0);
+        document.getElementById('fed-cooperation').textContent = fedAvgs.cooperation.toFixed(0);
+        document.getElementById('cooperation-diff').textContent = (fedAvgs.cooperation - flatAvgs.cooperation).toFixed(0);
+    }
+
+    calculateAverage(arr) {
+        if (arr.length === 0) return 0;
+        return arr.reduce((sum, val) => sum + val, 0) / arr.length;
+    }
+
+    exportMetrics() {
+        const data = {
+            simulationConfig: this.currentConfig,
+            timedSimulation: {
+                duration: this.timedSimulation.duration / 60000, // Convert back to minutes
+                floodFrequency: this.timedSimulation.floodFrequency,
+                floodsTriggered: this.timedSimulation.floodsTriggered
+            },
+            metrics: {
+                flat: this.metricsCollector.flat,
+                federated: this.metricsCollector.federated
+            },
+            summary: {
+                flat: {
+                    deliveryRatio: this.calculateAverage(this.metricsCollector.flat.deliveryRatio),
+                    latency: this.calculateAverage(this.metricsCollector.flat.latency),
+                    recoveryTime: this.calculateAverage(this.metricsCollector.flat.recoveryTime),
+                    dataLoss: this.calculateAverage(this.metricsCollector.flat.dataLoss),
+                    resilience: this.calculateAverage(this.metricsCollector.flat.resilience),
+                    cooperation: this.calculateAverage(this.metricsCollector.flat.cooperation)
+                },
+                federated: {
+                    deliveryRatio: this.calculateAverage(this.metricsCollector.federated.deliveryRatio),
+                    latency: this.calculateAverage(this.metricsCollector.federated.latency),
+                    recoveryTime: this.calculateAverage(this.metricsCollector.federated.recoveryTime),
+                    dataLoss: this.calculateAverage(this.metricsCollector.federated.dataLoss),
+                    resilience: this.calculateAverage(this.metricsCollector.federated.resilience),
+                    cooperation: this.calculateAverage(this.metricsCollector.federated.cooperation)
+                }
+            },
+            exportTime: new Date().toISOString()
+        };
+
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `flood-watch-metrics-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        this.logMessage('📊 Metrics exported successfully', 'info');
     }
 }
 

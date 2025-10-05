@@ -38,6 +38,18 @@
                 <div class="control-group">
                     <h3>Events</h3>
                     <button id="trigger-flood-btn" class="btn warning">🌊 Trigger Flood</button>
+                    <div class="simulation-controls">
+                        <h4>🎯 Time-Based Simulation</h4>
+                        <label>Simulation Duration (minutes): <input type="number" id="sim-duration" value="5" min="1" max="60"></label>
+                        <label>Flood Frequency (floods/minute): <input type="number" id="flood-frequency" value="1" min="0.1" max="10" step="0.1"></label>
+                        <small style="color: #666; display: block; margin-top: 0.5rem;">💡 Tip: 1 flood/minute = 1 flood every 60 seconds. Use 0.1 for testing = 1 flood every 10 minutes</small>
+                        <button id="start-timed-simulation-btn" class="btn success">⏰ Start Timed Simulation</button>
+                        <button id="stop-timed-simulation-btn" class="btn danger" disabled>⏹️ Stop Timed Simulation</button>
+                        <div id="timed-sim-status" class="sim-status-display" style="display: none;">
+                            <span>Time Remaining: <span id="time-remaining">--</span></span>
+                            <span>Floods Triggered: <span id="floods-triggered">0</span></span>
+                        </div>
+                    </div>
                     <p class="info-text">All nodes are uniform sensors with configurable range</p>
                 </div>
             </div>
@@ -214,6 +226,65 @@
                     <h3>Grid Dimensions</h3>
                     <div class="metric-value" id="grid-dimensions">100m×50m</div>
                     <div class="metric-label">Network Size</div>
+                </div>
+            </div>
+
+            <!-- Architecture Comparison Metrics -->
+            <div class="architecture-comparison">
+                <h3>🏗️ Architecture Comparison Metrics</h3>
+                <div class="comparison-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Flat</th>
+                                <th>Federated</th>
+                                <th>Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Delivery Ratio</td>
+                                <td id="flat-delivery-ratio">--</td>
+                                <td id="fed-delivery-ratio">--</td>
+                                <td id="delivery-ratio-diff">--</td>
+                            </tr>
+                            <tr>
+                                <td>Latency (avg)</td>
+                                <td id="flat-latency">--</td>
+                                <td id="fed-latency">--</td>
+                                <td id="latency-diff">--</td>
+                            </tr>
+                            <tr>
+                                <td>Failure Recovery Time</td>
+                                <td id="flat-recovery-time">--</td>
+                                <td id="fed-recovery-time">--</td>
+                                <td id="recovery-time-diff">--</td>
+                            </tr>
+                            <tr>
+                                <td>Data Loss Rate</td>
+                                <td id="flat-data-loss">--</td>
+                                <td id="fed-data-loss">--</td>
+                                <td id="data-loss-diff">--</td>
+                            </tr>
+                            <tr>
+                                <td>System Resilience</td>
+                                <td id="flat-resilience">--</td>
+                                <td id="fed-resilience">--</td>
+                                <td id="resilience-diff">--</td>
+                            </tr>
+                            <tr>
+                                <td>Agentic Cooperation</td>
+                                <td id="flat-cooperation">--</td>
+                                <td id="fed-cooperation">--</td>
+                                <td id="cooperation-diff">--</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="metrics-export">
+                    <button id="export-metrics-btn" class="btn primary">📊 Export Metrics</button>
+                    <button id="reset-metrics-btn" class="btn secondary">🔄 Reset Metrics</button>
                 </div>
             </div>
 
