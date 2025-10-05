@@ -45,11 +45,12 @@
             <div id="flood-controls" class="hidden">
                 <h3>Flood Parameters</h3>
                 <p>Click on the grid to trigger flood at that location, or use coordinates:</p>
-                <label>X: <input type="number" id="flood-x" value="12" min="0" max="24"></label>
-                <label>Y: <input type="number" id="flood-y" value="12" min="0" max="24"></label>
-                <label>Max Water Level: <input type="number" id="flood-level" value="2.5" min="1.0" max="5.0" step="0.1"></label>
-                <label>Duration (seconds): <input type="number" id="flood-duration" value="60" min="10" max="300" step="5"></label>
-                <p class="info-text">Water level will gradually increase from 0 to max level over the specified duration</p>
+                <label>Epicenter X: <input type="number" id="flood-x" value="12" min="0" max="24"></label>
+                <label>Epicenter Y: <input type="number" id="flood-y" value="12" min="0" max="24"></label>
+                <label>Boundary Radius (m): <input type="number" id="flood-radius" value="5" min="1" max="15" step="0.5"></label>
+                <label>Max Water Level (m): <input type="number" id="flood-level" value="2.5" min="1.0" max="5.0" step="0.1"></label>
+                <label>Spread Duration (s): <input type="number" id="flood-duration" value="60" min="10" max="300" step="5"></label>
+                <p class="info-text">Flood will gradually spread from epicenter to boundary radius over the specified duration</p>
                 <button id="confirm-flood-btn" class="btn warning">Confirm Flood</button>
                 <button id="cancel-flood-btn" class="btn secondary">Cancel</button>
             </div>

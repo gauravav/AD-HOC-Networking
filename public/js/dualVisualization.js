@@ -624,6 +624,7 @@ class DualGridVisualization {
 
         if (existingFlood) {
             existingFlood.intensity = intensity;
+            existingFlood.radius = radius; // Update radius for spreading animation
         } else {
             this.addFloodArea(x, y, radius, intensity);
             return;

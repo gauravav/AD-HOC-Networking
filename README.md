@@ -64,20 +64,84 @@ A comprehensive real-time simulation of Ad-Hoc Wireless Sensor Networks for floo
 - **Battery Monitoring**: Continuous tracking of sensor power levels
 
 ### Flood Detection & Response
-1. **Water Level Monitoring**: Sensors continuously measure water levels
-2. **Threshold Detection**: Alerts triggered when water exceeds 1.0 meters
-3. **Emergency Broadcasting**: Immediate alert transmission to central server
-4. **Continuous Reporting**: 10-second interval updates during active flooding
+1. **Water Level Monitoring**: Sensors continuously measure water levels as flood spreads
+2. **Detection Threshold**: Alerts triggered when water exceeds 1.0 meters
+3. **Initial Alert**: First detection sends HIGH severity alert immediately to central server
+4. **Continuous Reporting**: 10-second interval updates during active flooding with updated severity levels:
+   - **LOW**: 1.0-1.5m water level
+   - **MEDIUM**: 1.5-2.0m water level
+   - **HIGH**: 2.0-3.0m water level
+   - **CRITICAL**: 3.0m+ water level
 
-### Network Degradation & Recovery
-As flood waters rise, the system realistically simulates connectivity degradation:
+### Gradual Flood Spreading Simulation
+Floods spread realistically from epicenter to user-defined boundary:
 
-#### Sensor/Gateway Degradation Levels
-- **0.2-0.5m (Light Exposure)**: 95% reliability, 95% communication range
-- **0.5-1.0m (Early Flooding)**: 80% reliability, 80% range, 10% failure chance
-- **1.0-1.5m (Moderate Flooding)**: 50% reliability, 60% range, 30% failure chance
-- **1.5-2.5m (Major Flooding)**: 20% reliability, 40% range, 60% failure chance
-- **2.5m+ (Catastrophic)**: Complete sensor failure
+#### Spreading Phases
+- **Phase 1 - Spreading (60% of duration)**: Water expands from epicenter outward to boundary radius
+  - Radius gradually increases from 0 to maximum boundary
+  - Water level rises progressively as flood spreads
+  - Sensors detect water only when spreading wave reaches their location
+
+- **Phase 2 - Sustain (20% of duration)**: Full coverage at maximum water level
+  - Flood covers entire boundary radius
+  - Water level at maximum across all affected area
+
+- **Phase 3 - Receding (20% of duration)**: Water level decreases
+  - Coverage area remains constant at boundary radius
+  - Water level gradually decreases to zero
+
+#### Water Distribution
+- **Epicenter**: Full water level intensity (100%)
+- **Mid-radius**: Reduced intensity based on distance
+- **Boundary Edge**: 60% of maximum water level
+- **Minimum Detection**: 0.1m threshold for sensor activation
+
+### Network Degradation & Sensor Failure
+As flood waters rise, sensors experience progressive degradation and eventual failure:
+
+#### Connectivity Degradation Levels
+- **< 0.2m (Normal Operation)**:
+  - 100% connectivity reliability
+  - 100% communication range
+  - Full sensor functionality
+  - **Sensors operate normally and send data reliably**
+
+- **0.2-0.5m (Light Water Exposure)**:
+  - 95% connectivity reliability
+  - 95% communication range
+  - Minimal impact on operations
+  - **Sensors continue sending data with slight reliability reduction**
+
+- **0.5-1.0m (Early Flooding)**:
+  - 80% connectivity reliability
+  - 80% communication range
+  - 10% chance of sensor failure
+  - **Sensors may fail to send some messages, but mostly operational**
+
+- **1.0-1.5m (Moderate Flooding)**:
+  - 50% connectivity reliability
+  - 60% communication range
+  - 30% chance of sensor failure
+  - **Significant data loss - only ~50% of messages reach central server**
+
+- **1.5-2.5m (Major Flooding)**:
+  - 20% connectivity reliability
+  - 40% communication range
+  - 60% chance of sensor failure
+  - **Critical degradation - sensor likely fails, minimal data transmission**
+
+- **≥ 2.5m (Catastrophic Flooding)**:
+  - **Complete sensor failure**
+  - **All communication ceases**
+  - **Sensor cannot send any data**
+  - **Physical hardware failure assumed**
+
+#### When Sensors Fail
+Sensors fail at different water levels based on probability:
+- **First failures appear**: Around 0.5-1.0m (10% probability)
+- **Most failures occur**: At 1.5-2.5m range (60% probability)
+- **Guaranteed failure**: At or above 2.5m water level
+- **Failed sensors**: Stop all communication, appear inactive in visualization
 
 #### Automatic Recovery
 When flood waters recede below critical levels:

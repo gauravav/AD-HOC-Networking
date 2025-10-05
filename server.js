@@ -38,7 +38,7 @@ io.on('connection', (socket) => {
 
   socket.on('trigger-flood', (data) => {
     if (simulation) {
-      simulation.triggerGradualFlood(data.x, data.y, data.maxWaterLevel, data.duration);
+      simulation.triggerGradualFlood(data.x, data.y, data.maxWaterLevel, data.duration, data.radius);
     }
   });
 

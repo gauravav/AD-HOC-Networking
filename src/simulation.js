@@ -575,24 +575,26 @@ class FloodWatchSimulation {
 
 
 
-  triggerGradualFlood(x, y, maxWaterLevel, durationSeconds) {
+  triggerGradualFlood(x, y, maxWaterLevel, durationSeconds, radius = 5) {
     const floodId = `FLOOD-${Date.now()}`;
     const flood = {
       id: floodId,
       epicenter: { x, y },
       maxWaterLevel: maxWaterLevel,
       currentWaterLevel: 0,
+      currentRadius: 0, // Start at epicenter
+      maxRadius: radius, // User-defined boundary
       duration: durationSeconds * 1000, // Convert to milliseconds
       startTime: Date.now(),
-      ticksPerSecond: 1000 / this.config.simulationSpeed,
-      radius: 5 // 5-unit radius
+      ticksPerSecond: 1000 / this.config.simulationSpeed
     };
 
     this.activeFloods.set(floodId, flood);
 
-    this.log(`🌊 GRADUAL FLOOD STARTED at (${x}, ${y}) - will reach ${maxWaterLevel.toFixed(1)}m over ${durationSeconds}s`, {
+    this.log(`🌊 GRADUAL FLOOD STARTED at (${x}, ${y}) - will spread to ${radius}m radius and reach ${maxWaterLevel.toFixed(1)}m over ${durationSeconds}s`, {
       epicenter: { x, y },
       maxWaterLevel,
+      maxRadius: radius,
       duration: durationSeconds,
       type: 'GRADUAL_FLOOD_START'
     });
@@ -601,6 +603,7 @@ class FloodWatchSimulation {
       epicenter: { x, y },
       waterLevel: 0,
       maxWaterLevel: maxWaterLevel,
+      maxRadius: radius,
       duration: durationSeconds,
       type: 'gradual',
       affectedNodes: []
@@ -613,27 +616,38 @@ class FloodWatchSimulation {
 
     for (const [floodId, flood] of this.activeFloods.entries()) {
       const elapsedTime = now - flood.startTime;
-      const buildupTime = flood.duration * 0.3; // 30% of time to reach max level
+      const spreadTime = flood.duration * 0.6; // 60% of time for spreading
+      const sustainTime = flood.duration * 0.8; // 80% of total time at peak
 
-      let progress, currentWaterLevel;
+      let progress, currentWaterLevel, currentRadius;
 
-      if (elapsedTime <= buildupTime) {
-        // Rising phase - water level increases to maximum
-        progress = elapsedTime / buildupTime;
-        currentWaterLevel = flood.maxWaterLevel * progress;
-      } else if (elapsedTime <= flood.duration) {
-        // Sustain phase - water level stays at maximum
+      if (elapsedTime <= spreadTime) {
+        // Spreading phase - flood expands from epicenter to boundary
+        progress = elapsedTime / spreadTime;
+        currentRadius = flood.maxRadius * progress;
+        currentWaterLevel = flood.maxWaterLevel * Math.min(1.0, progress * 1.5); // Water rises faster initially
+      } else if (elapsedTime <= sustainTime) {
+        // Sustain phase - full coverage at maximum level
         progress = 1.0;
+        currentRadius = flood.maxRadius;
         currentWaterLevel = flood.maxWaterLevel;
-      } else {
-        // Flood duration exceeded - start cleanup
+      } else if (elapsedTime <= flood.duration) {
+        // Receding phase - water level decreases
+        const recedeProgress = (elapsedTime - sustainTime) / (flood.duration - sustainTime);
         progress = 1.0;
-        currentWaterLevel = flood.maxWaterLevel * Math.max(0, 1 - ((elapsedTime - flood.duration) / (flood.duration * 0.2)));
+        currentRadius = flood.maxRadius;
+        currentWaterLevel = flood.maxWaterLevel * (1 - recedeProgress);
+      } else {
+        // Cleanup phase
+        progress = 1.0;
+        currentRadius = flood.maxRadius;
+        currentWaterLevel = 0;
       }
 
       flood.currentWaterLevel = currentWaterLevel;
+      flood.currentRadius = currentRadius;
 
-      // Apply flood to affected nodes
+      // Apply flood to affected nodes based on spreading radius
       const floodAffectedNodes = [];
       for (const node of this.sensors) {
         const distance = Math.sqrt(
@@ -641,28 +655,39 @@ class FloodWatchSimulation {
           Math.pow(node.location.y - flood.epicenter.y, 2)
         );
 
-        if (distance <= flood.radius) {
-          // Give full water level at epicenter, reducing to 50% at edge of radius
-          const distanceRatio = distance / flood.radius;
-          const adjustedWaterLevel = flood.currentWaterLevel * (1 - (distanceRatio * 0.5));
-          if (adjustedWaterLevel > 0) {
+        // Only affect nodes within current spreading radius
+        if (distance <= currentRadius) {
+          // Water level decreases with distance from epicenter
+          const distanceRatio = currentRadius > 0 ? distance / currentRadius : 0;
+          const adjustedWaterLevel = currentWaterLevel * (1 - (distanceRatio * 0.4)); // 60% intensity at edge
+
+          if (adjustedWaterLevel > 0.1) { // Minimum threshold for detection
             node.updateWaterLevel(adjustedWaterLevel);
             floodAffectedNodes.push({
               nodeId: node.id,
               waterLevel: adjustedWaterLevel,
-              location: node.location
+              location: node.location,
+              distance: distance
             });
+          } else if (distance <= flood.maxRadius && currentWaterLevel === 0) {
+            // Cleanup: reset nodes to 0 when flood recedes
+            node.updateWaterLevel(0);
           }
+        } else if (currentWaterLevel === 0 && distance <= flood.maxRadius) {
+          // Ensure all nodes in max radius are reset when flood ends
+          node.updateWaterLevel(0);
         }
       }
 
       // Update flood visualization
-      if (this.currentTick % 5 === 0) { // Update every 5 ticks to reduce spam
+      if (this.currentTick % 3 === 0) { // Update every 3 ticks for smoother animation
         this.emit('flood-update', {
           floodId: floodId,
           epicenter: flood.epicenter,
           currentWaterLevel: flood.currentWaterLevel,
           maxWaterLevel: flood.maxWaterLevel,
+          currentRadius: flood.currentRadius,
+          maxRadius: flood.maxRadius,
           progress: progress,
           affectedNodes: floodAffectedNodes
         });
@@ -671,9 +696,10 @@ class FloodWatchSimulation {
       affectedNodes.push(...floodAffectedNodes);
 
       // Remove floods that have completely receded
-      if (elapsedTime > flood.duration * 1.2 && currentWaterLevel <= 0) {
-        this.log(`🌊 GRADUAL FLOOD RECEDED at (${flood.epicenter.x}, ${flood.epicenter.y}) - lasted ${Math.round(elapsedTime / 1000)}s`, {
+      if (elapsedTime > flood.duration && currentWaterLevel <= 0) {
+        this.log(`🌊 GRADUAL FLOOD RECEDED at (${flood.epicenter.x}, ${flood.epicenter.y}) - spread to ${flood.maxRadius}m radius over ${Math.round(elapsedTime / 1000)}s`, {
           epicenter: flood.epicenter,
+          maxRadius: flood.maxRadius,
           finalWaterLevel: 0,
           type: 'GRADUAL_FLOOD_RECEDED'
         });
@@ -682,19 +708,9 @@ class FloodWatchSimulation {
         this.emit('flood-receded', {
           floodId: floodId,
           epicenter: flood.epicenter,
+          maxRadius: flood.maxRadius,
           duration: Math.round(elapsedTime / 1000)
         });
-
-        // Set all affected nodes back to 0 water level
-        for (const node of this.sensors) {
-          const distance = Math.sqrt(
-            Math.pow(node.location.x - flood.epicenter.x, 2) +
-            Math.pow(node.location.y - flood.epicenter.y, 2)
-          );
-          if (distance <= flood.radius) {
-            node.updateWaterLevel(0);
-          }
-        }
 
         this.activeFloods.delete(floodId);
       }

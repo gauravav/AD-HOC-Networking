@@ -259,16 +259,17 @@ class FloodWatchApp {
     triggerFlood() {
         const x = parseInt(document.getElementById('flood-x').value);
         const y = parseInt(document.getElementById('flood-y').value);
+        const radius = parseFloat(document.getElementById('flood-radius').value);
         const maxWaterLevel = parseFloat(document.getElementById('flood-level').value);
         const duration = parseInt(document.getElementById('flood-duration').value);
 
         if (x >= 0 && x < this.currentConfig.gridWidth &&
             y >= 0 && y < this.currentConfig.gridHeight &&
-            maxWaterLevel > 0 && duration > 0) {
+            radius > 0 && maxWaterLevel > 0 && duration > 0) {
 
-            this.socket.emit('trigger-flood', { x, y, maxWaterLevel, duration });
+            this.socket.emit('trigger-flood', { x, y, radius, maxWaterLevel, duration });
             this.hideFloodControls();
-            this.logMessage(`Manually triggered gradual flood at (${x}, ${y}) - will reach ${maxWaterLevel}m over ${duration}s`, 'warning');
+            this.logMessage(`Manually triggered gradual flood at (${x}, ${y}) - will spread to ${radius}m radius and reach ${maxWaterLevel}m over ${duration}s`, 'warning');
         } else {
             alert('Invalid flood parameters');
         }
@@ -480,9 +481,10 @@ class FloodWatchApp {
 
     handleFloodEvent(data) {
         if (data.type === 'gradual') {
-            this.logMessage(`Gradual flood started at (${data.epicenter.x}, ${data.epicenter.y}) - will reach ${data.maxWaterLevel}m over ${data.duration}s`, 'warning');
-            // Add initial flood visualization with specified duration
-            this.dualGridVis.addFloodArea(data.epicenter.x, data.epicenter.y, 5, data.waterLevel / 5, data.duration * 1000);
+            const radius = data.maxRadius || 5;
+            this.logMessage(`Gradual flood started at (${data.epicenter.x}, ${data.epicenter.y}) - will spread to ${radius}m and reach ${data.maxWaterLevel}m over ${data.duration}s`, 'warning');
+            // Add initial flood visualization with specified duration and radius
+            this.dualGridVis.addFloodArea(data.epicenter.x, data.epicenter.y, 0.1, 0, data.duration * 1000);
         } else {
             this.logMessage(`Flood detected at (${data.epicenter.x}, ${data.epicenter.y}) - ${data.affectedNodes.length} nodes affected`, 'warning');
             // Add flood visualization with default duration for instant floods
@@ -491,14 +493,15 @@ class FloodWatchApp {
     }
 
     handleFloodUpdate(data) {
-        // Update flood visualization with current progress
+        // Update flood visualization with current spreading radius and water level
         const intensity = data.currentWaterLevel / data.maxWaterLevel;
-        this.dualGridVis.updateFloodArea(data.epicenter.x, data.epicenter.y, 5, intensity);
+        const currentRadius = data.currentRadius || data.maxRadius || 5;
+        this.dualGridVis.updateFloodArea(data.epicenter.x, data.epicenter.y, currentRadius, intensity);
 
         // Log progress updates occasionally
         const progress = Math.round(data.progress * 100);
         if (progress % 25 === 0 && progress > 0) { // Log at 25%, 50%, 75%, 100%
-            this.logMessage(`Flood at (${data.epicenter.x}, ${data.epicenter.y}) - ${progress}% complete (${data.currentWaterLevel.toFixed(1)}m)`, 'info');
+            this.logMessage(`Flood at (${data.epicenter.x}, ${data.epicenter.y}) - ${progress}% spread (radius: ${currentRadius.toFixed(1)}m, water: ${data.currentWaterLevel.toFixed(1)}m)`, 'info');
         }
     }
 
